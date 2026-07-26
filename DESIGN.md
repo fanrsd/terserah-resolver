@@ -129,6 +129,12 @@ Bureaucratic labels (`PERKARA NO.`, `CATATAN HAKIM`) are a deliberate brand syst
 not the tracked-caps eyebrow reflex: they appear only where a real document carries a
 field label, never as a decorative kicker above every section.
 
+**Inline links in body copy** carry `--stamp-lift` plus an underline at
+`underline-offset-4`, hovering to `--bone`. The underline is not decoration: colour
+alone is not an affordance, and `--stamp` itself is display-size only. Standalone
+navigational links (`Ajukan perkara baru`) stay underline-free and shift colour only —
+they already read as controls from their position.
+
 ## Signature motif: the stamp
 
 The hero object, and the reason the page is not typography-only. An inked rubber stamp
