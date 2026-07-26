@@ -240,17 +240,21 @@ function normalisePlace(name: string): string {
  * ran, and `place_verified` claimed nothing at all rather than lying either
  * way only because the outer gate happened to be false too.
  */
-async function placeExists(name: string): Promise<boolean | null> {
+export async function placeExists(name: string): Promise<boolean | null> {
   const db = supabase();
   if (!db) return null;
 
+  // `limit(1)` rather than `maybeSingle()`: the latter asks PostgREST for a
+  // bare object and calls a miss a 406, which makes "absent" and "broken"
+  // travel the same channel. This distinction is the whole point of the
+  // function, so it gets a plain array and an explicit length check.
   const { data, error } = await db
     .from("places")
     .select("nn")
     .eq("nn", normalisePlace(name))
-    .maybeSingle();
+    .limit(1);
 
-  return error ? null : data !== null;
+  return error ? null : (data?.length ?? 0) > 0;
 }
 
 /**
