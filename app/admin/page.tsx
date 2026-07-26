@@ -84,7 +84,7 @@ export default async function AdminRiwayat({
             className={`chrome border px-3 py-2 transition-colors duration-150 ${
               filter === key
                 ? "border-stamp text-stamp-lift"
-                : "border-ink-line text-muted hover:text-bone"
+                : "border-ink-edge text-muted hover:text-bone"
             }`}
           >
             {label}

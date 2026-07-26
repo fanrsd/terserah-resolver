@@ -46,13 +46,13 @@ export function LoginForm() {
         autoComplete="current-password"
         autoFocus
         onChange={(event) => setPassword(event.target.value)}
-        className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-xl text-bone transition-colors duration-150 ease-[var(--ease-out-quart)] focus:border-stamp focus:outline-none"
+        className="mt-2 w-full border-b-2 border-ink-edge bg-transparent pb-2 text-xl text-bone transition-colors duration-150 ease-[var(--ease-out-quart)] focus:border-stamp focus:outline-none"
       />
 
       <button
         type="submit"
         disabled={!password || pending}
-        className="display mt-6 w-full bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-lift active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-ink-raised disabled:text-muted"
+        className="display mt-6 w-full border-2 border-transparent bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color,border-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-deep active:scale-[0.985] disabled:cursor-not-allowed disabled:border-ink-edge disabled:bg-transparent disabled:text-muted"
       >
         {pending ? "Memeriksa…" : "Masuk"}
       </button>

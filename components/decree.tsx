@@ -34,8 +34,8 @@ export function Decree({
   return (
     <article className="sheet animate-decree relative overflow-hidden px-5 py-6 sm:px-8 sm:py-8">
       <header className="flex items-baseline justify-between gap-4 border-b border-decree-ink/25 pb-3">
-        <p className="chrome text-decree-ink/70">{caseNo}</p>
-        <p className="chrome text-decree-ink/70">{DATE.format(date)}</p>
+        <p className="chrome text-decree-muted">{caseNo}</p>
+        <p className="chrome text-decree-muted">{DATE.format(date)}</p>
       </header>
 
       <p className="chrome mt-6 text-stamp-deep">Diputuskan</p>
@@ -45,23 +45,15 @@ export function Decree({
       </Title>
 
       <div className="mt-5 border-t border-decree-ink/25 pt-4">
-        <p className="chrome text-decree-ink/70">Catatan hakim</p>
+        <p className="chrome text-decree-muted">Catatan hakim</p>
         <p className="mt-2 max-w-[52ch] text-[0.9375rem] font-normal leading-relaxed text-decree-ink">
           {reasoning}
         </p>
       </div>
 
-      {mapsQuery ? (
-        <a
-          href={mapsUrl(mapsQuery)}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="display mt-6 inline-block bg-decree-ink px-5 py-3 text-lg text-decree transition-transform duration-150 ease-[var(--ease-out-quart)] active:scale-[0.98]"
-        >
-          Buka di Maps
-        </a>
-      ) : null}
-
+      {/* In flow, not absolutely positioned: the stamp used to be anchored to
+          the card and landed on the domain line below 360px. A lifted block
+          still strikes across the reasoning without ever meeting it. */}
       <Stamp
         label={surrendered ? "Tanpa lawan" : "Final"}
         sub={
@@ -70,10 +62,21 @@ export function Decree({
             : "Tidak dapat diganggu gugat"
         }
         tone={surrendered ? "seal" : "stamp"}
-        className="animate-stamp pointer-events-none absolute bottom-4 right-3 w-[56%] max-w-[14.5rem] opacity-90 mix-blend-multiply sm:right-6"
+        className="animate-stamp pointer-events-none -mt-7 ml-auto mr-2 block w-[56%] max-w-[14.5rem] mix-blend-multiply sm:mr-4"
       />
 
-      <p className={`chrome text-decree-ink/45 ${mapsQuery ? "mt-12" : "mt-16"}`}>
+      {mapsQuery ? (
+        <a
+          href={mapsUrl(mapsQuery)}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="display mt-4 inline-block bg-decree-ink px-5 py-3 text-lg text-decree transition-transform duration-150 ease-[var(--ease-out-quart)] active:scale-[0.98]"
+        >
+          Buka di Maps
+        </a>
+      ) : null}
+
+      <p className={`chrome text-decree-muted ${mapsQuery ? "mt-8" : "mt-10"}`}>
         {SITE_DOMAIN}
       </p>
     </article>

@@ -139,7 +139,7 @@ export function SettingsForm({
                 autoComplete="off"
                 aria-describedby="baseUrl-hint"
                 onChange={(event) => patch({ baseUrl: event.target.value })}
-                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+                className="mt-2 w-full border-b-2 border-ink-edge bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
               />
               <p id="baseUrl-hint" className="mt-2 text-xs font-normal text-muted">
                 Boleh berakhir di <code>/v1</code> atau langsung di{" "}
@@ -153,7 +153,7 @@ export function SettingsForm({
                     onClick={() =>
                       patch({ baseUrl: preset.baseUrl, model: preset.model })
                     }
-                    className="chrome border border-ink-line px-3 py-2 text-muted transition-colors duration-150 hover:border-stamp hover:text-stamp-lift"
+                    className="chrome border border-ink-edge px-3 py-2 text-muted transition-colors duration-150 hover:border-stamp hover:text-stamp-lift"
                   >
                     {preset.label}
                   </button>
@@ -196,7 +196,7 @@ export function SettingsForm({
                   setApiKey(event.target.value || undefined);
                   setStatus("idle");
                 }}
-                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none disabled:text-muted"
+                className="mt-2 w-full border-b-2 border-ink-edge bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none disabled:text-muted"
               />
               <p id="apiKey-hint" className="mt-2 max-w-[68ch] text-xs font-normal text-muted">
                 {canStoreSecrets
@@ -221,14 +221,14 @@ export function SettingsForm({
                 autoComplete="off"
                 placeholder="google/gemini-2.5-flash"
                 onChange={(event) => patch({ model: event.target.value })}
-                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+                className="mt-2 w-full border-b-2 border-ink-edge bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
               />
             ) : (
               <select
                 id="model"
                 value={form.model}
                 onChange={(event) => patch({ model: event.target.value })}
-                className="mt-2 w-full border-b-2 border-ink-line bg-ink pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+                className="mt-2 w-full border-b-2 border-ink-edge bg-ink pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
               >
                 {[...new Set([...GEMINI_MODELS, form.model])].map((model) => (
                   <option key={model} value={model}>
@@ -286,7 +286,7 @@ export function SettingsForm({
             maxLength={LIMITS.personaMax}
             spellCheck={false}
             onChange={(event) => patch({ persona: event.target.value })}
-            className="mt-2 w-full resize-y border border-ink-line bg-ink-raised p-4 text-sm font-normal leading-relaxed text-bone focus:border-stamp focus:outline-none"
+            className="mt-2 w-full resize-y border border-ink-edge bg-ink-raised p-4 text-sm font-normal leading-relaxed text-bone focus:border-stamp focus:outline-none"
           />
           <p className="mt-2 max-w-[68ch] text-xs font-normal text-muted">
             Aturan &ldquo;sindir kedua belah pihak&rdquo; adalah satu-satunya
@@ -319,7 +319,7 @@ export function SettingsForm({
         <button
           type="submit"
           disabled={disabled || status === "saving"}
-          className="display bg-stamp px-6 py-3 text-xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-lift active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-ink-raised disabled:text-muted"
+          className="display border-2 border-transparent bg-stamp px-6 py-3 text-xl text-decree transition-[transform,background-color,border-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-deep active:scale-[0.985] disabled:cursor-not-allowed disabled:border-ink-edge disabled:bg-transparent disabled:text-muted"
         >
           {status === "saving" ? "Menyimpan…" : "Simpan"}
         </button>
@@ -327,7 +327,7 @@ export function SettingsForm({
           type="button"
           onClick={test}
           disabled={probe.state === "running"}
-          className="chrome border border-ink-line px-4 py-3 text-bone transition-colors duration-150 hover:border-stamp hover:text-stamp-lift disabled:text-muted"
+          className="chrome border border-ink-edge px-4 py-3 text-bone transition-colors duration-150 hover:border-stamp hover:text-stamp-lift disabled:text-muted"
         >
           {probe.state === "running" ? "Menguji…" : "Uji koneksi"}
         </button>
@@ -394,7 +394,7 @@ function Choice({
       className={`flex-1 min-w-[14rem] border px-4 py-3 text-left transition-colors duration-150 ${
         checked
           ? "border-stamp bg-stamp/10"
-          : "border-ink-line hover:border-muted"
+          : "border-ink-edge hover:border-muted"
       }`}
     >
       <span className={`block text-base ${checked ? "text-bone" : "text-muted"}`}>

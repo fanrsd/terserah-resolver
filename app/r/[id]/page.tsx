@@ -120,7 +120,7 @@ function Closed() {
       </p>
       <Link
         href="/"
-        className="display mt-8 self-start bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-lift active:scale-[0.985]"
+        className="display mt-8 self-start bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-deep active:scale-[0.985]"
       >
         Ajukan perkara baru
       </Link>

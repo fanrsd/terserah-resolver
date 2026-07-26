@@ -5,6 +5,9 @@
   --color-ink: oklch(0.17 0.015 25);
   --color-ink-raised: oklch(0.22 0.018 25);
   --color-ink-line: oklch(0.32 0.02 25);
+  /* ink-line is a hairline (1.5:1) and stays decorative. Control boundaries
+     — input underlines, bordered buttons — need 3:1 per WCAG 1.4.11. */
+  --color-ink-edge: oklch(0.52 0.02 25);
   /* stamp clears only 3:1 on ink, so it is display-size only.
      These two carry small text: lift on dark, deep on the sheet. */
   --color-stamp: oklch(0.58 0.21 27);
@@ -12,6 +15,9 @@
   --color-stamp-deep: oklch(0.48 0.19 27);
   --color-decree: oklch(0.94 0.008 40);
   --color-decree-ink: oklch(0.2 0.01 40);
+  /* Secondary text on the sheet. Replaces the decree-ink/70 and /45 alpha
+     modifiers, which measured 2.89:1 and 1.73:1 against 4.5:1 required. */
+  --color-decree-muted: oklch(0.51 0.01 40);
   --color-bone: oklch(0.92 0.006 40);
   --color-muted: oklch(0.68 0.012 25);
   /* The stamp is text inside an image, so it needs 4.5:1 on the sheet, not 3:1.
@@ -32,6 +38,13 @@
     --z-overlay: 20;
     --z-toast: 30;
     color-scheme: dark;
+  }
+
+  html,
+  body {
+    /* clip, never hidden: hidden would kill position:sticky on descendants.
+       A long franchise name should never buy a horizontal scrollbar. */
+    overflow-x: clip;
   }
 
   html {
@@ -126,7 +139,7 @@
     transform: rotate(-14deg) scale(1.9);
   }
   to {
-    opacity: 0.92;
+    opacity: 1;
     transform: rotate(-9deg) scale(1);
   }
 }
@@ -171,10 +184,6 @@
   .animate-line {
     animation-duration: 1ms;
     animation-delay: 0ms;
-  }
-
-  .animate-stamp {
-    opacity: 0.92;
   }
 
   .caret::after {

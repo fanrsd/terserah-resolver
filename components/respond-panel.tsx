@@ -99,7 +99,7 @@ export function RespondPanel({ id }: { id: string }) {
                     ),
                   )
                 }
-                className="w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone transition-colors duration-150 ease-[var(--ease-out-quart)] focus:border-stamp focus:outline-none"
+                className="w-full border-b-2 border-ink-edge bg-transparent pb-2 text-lg text-bone transition-colors duration-150 ease-[var(--ease-out-quart)] focus:border-stamp focus:outline-none"
               />
             </li>
           ))}
@@ -108,7 +108,7 @@ export function RespondPanel({ id }: { id: string }) {
         <button
           type="submit"
           disabled={!complete}
-          className="display mt-8 w-full bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-lift active:scale-[0.985] disabled:cursor-not-allowed disabled:bg-ink-raised disabled:text-muted"
+          className="display mt-8 w-full border-2 border-transparent bg-stamp px-6 py-4 text-2xl text-decree transition-[transform,background-color,border-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-deep active:scale-[0.985] disabled:cursor-not-allowed disabled:border-ink-edge disabled:bg-transparent disabled:text-muted"
         >
           Ajukan keberatan
         </button>
@@ -126,7 +126,7 @@ export function RespondPanel({ id }: { id: string }) {
       <button
         type="button"
         onClick={() => setStage("protesting")}
-        className="display w-full bg-stamp px-6 py-5 text-3xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-lift active:scale-[0.985] sm:text-4xl"
+        className="display w-full bg-stamp px-6 py-5 text-3xl text-decree transition-[transform,background-color] duration-150 ease-[var(--ease-out-quart)] hover:bg-stamp-deep active:scale-[0.985] sm:text-4xl"
       >
         Gak mau ah
       </button>

@@ -10,6 +10,7 @@ const STAMP = "#db2c2b";
 const STAMP_DEEP = "#b00c15";
 const DECREE = "#f0e9e7";
 const DECREE_INK = "#1a1513";
+const DECREE_MUTED = "#6b6462"; // --color-decree-muted, 4.8:1 on the sheet
 const BONE = "#e8e3e1";
 const MUTED = "#a09694";
 const SEAL = "#5b5c15"; // --color-seal-deep
@@ -162,10 +163,10 @@ export async function GET(
               paddingBottom: 18,
             }}
           >
-            <div style={{ ...label, color: `${DECREE_INK}b3`, display: "flex" }}>
+            <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
               Perkara No. {id.toUpperCase()}
             </div>
-            <div style={{ ...label, color: `${DECREE_INK}b3`, display: "flex" }}>
+            <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
               {SITE_DOMAIN}
             </div>
           </div>
@@ -215,7 +216,6 @@ export async function GET(
               height: 108,
               border: `7px solid ${surrendered ? SEAL : STAMP_DEEP}`,
               transform: "rotate(-8deg)",
-              opacity: 0.9,
             }}
           >
             <div

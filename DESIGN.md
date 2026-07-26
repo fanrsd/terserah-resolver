@@ -49,6 +49,7 @@ warm-by-default.
 --ink:         oklch(0.17 0.015 25);  /* body ground */
 --ink-raised:  oklch(0.22 0.018 25);  /* inputs, raised chrome */
 --ink-line:    oklch(0.32 0.020 25);  /* hairlines */
+--ink-edge:    oklch(0.52 0.020 25);  /* control boundaries: 3.45:1 on ink */
 
 --stamp:       oklch(0.58 0.210 27);  /* display-size only: 4.03:1 on ink */
 --stamp-lift:  oklch(0.68 0.180 27);  /* small red text on dark: 6.15:1 */
@@ -56,6 +57,7 @@ warm-by-default.
 
 --decree:      oklch(0.94 0.008 40);  /* the verdict card surface, ONLY here */
 --decree-ink:  oklch(0.20 0.010 40);  /* text on the card: 15.1:1 */
+--decree-muted:oklch(0.51 0.010 40);  /* secondary text on the card: 4.83:1 */
 
 --bone:        oklch(0.92 0.006 40);  /* body text on ink: 15.1:1 */
 --muted:       oklch(0.68 0.012 25);  /* labels, meta, placeholders: 6.65:1 */
@@ -72,6 +74,27 @@ to the page background.
 **Three reds, on purpose.** `--stamp` clears only 3:1, so it is reserved for display
 type and fills. Small red text takes `--stamp-lift` on dark or `--stamp-deep` on the
 sheet. The same split applies to brass. Every pair above is measured, not estimated.
+
+**Two greys on the dark side, on purpose.** `--ink-line` is a 1.5:1 hairline and stays
+decorative — section rules, table rows, the admin header. Anything that is the visual
+boundary of a *control* (input underlines, bordered buttons, the radio cards) takes
+`--ink-edge`, which clears the 3:1 WCAG 1.4.11 bar on both `--ink` and `--ink-raised`.
+
+**Never carry text on an alpha modifier.** Every pair above is measured at full opacity,
+so `text-decree-ink/70` is not a dimmer version of a passing token — it is 2.89:1 and it
+fails. Secondary text takes `--decree-muted` on the sheet and `--muted` on the ink. If a
+new tint is needed, measure it and give it a name.
+
+**Hover darkens, never lightens.** The filled CTA is `--decree` on `--stamp` at 3.98:1,
+which is display type clearing the 3:1 bar with nothing to spare. Lightening to
+`--stamp-lift` on hover drops it to 2.61:1 — a hover state less readable than its rest
+state. Hover goes to `--stamp-deep` (6.04:1): the surface presses in, it does not glow.
+
+**Disabled is a ghost, not a void.** A filled slab in `--ink-raised` sits at 1.10:1
+against the page and reads as a broken render, which is the first thing cold traffic
+sees on the landing. Disabled CTAs drop the fill and show a `--ink-edge` outline with
+`--muted` type. The buttons carry `border-2 border-transparent` at rest so the state
+change costs no layout shift.
 
 ## Typography
 
@@ -113,6 +136,10 @@ struck across the decree, drawn as SVG with `feTurbulence` + `feDisplacementMap`
 roughening the edges so it reads as pressed rubber rather than a vector rectangle,
 plus `mix-blend-multiply` so the ink sits into the paper.
 
+It sits in normal flow with a negative top margin, not absolutely positioned. Anchored
+to the card it landed on the domain line below 360px; lifted from the flow it strikes
+across the reasoning at every width and can never reach the line beneath it.
+
 Two states, which is how the two endings stay visually distinct:
 
 | Outcome | Label | Tone |
@@ -121,7 +148,11 @@ Two states, which is how the two endings stay visually distinct:
 | B surrendered, A's pick stands | `TANPA LAWAN` / hak suara tidak digunakan | `--seal-deep` |
 
 The stamp's sub-line is an image of text at 10.5px, so it takes the 4.5:1 bar, not the
-3:1 graphics bar. That is why both tones are the deep variants.
+3:1 graphics bar. That is why both tones are the deep variants — and why the SVG carries
+*two* filters: displacement at `scale=4.5` would smear a 10.5px glyph into noise, so the
+rules and the label take the rough filter and the sub-line takes a `scale=1.2` one. No
+wrapper opacity either; multiply alone does the ink-into-paper work, and 0.9 dropped the
+sub-line to 4.23:1.
 
 The landing renders the same component as a labelled specimen — it gives the page its
 visual anchor and shows cold traffic what they get, in one move.
