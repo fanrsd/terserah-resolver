@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Terserah">
+  <!-- The stamp die reduced to its irreducible form: at 16px the rubber edge
+       and the sub-line are mush, so only the initial survives. Drawn rather
+       than set in Anton, because a favicon SVG cannot load a webfont — and
+       optically corrected wider than Anton's true T, which goes thin at 16px.
+       app/apple-icon.tsx scales this same geometry; keep them in step. -->
+  <rect width="32" height="32" rx="2" fill="#db2c2b"/>
+  <path d="M8.5 5h15v6H19v16h-6V11H8.5z" fill="#f0e9e7"/>
+</svg>

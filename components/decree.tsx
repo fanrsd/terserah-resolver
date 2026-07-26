@@ -33,9 +33,14 @@ export function Decree({
 }) {
   return (
     <article className="sheet animate-decree relative overflow-hidden px-5 py-6 sm:px-8 sm:py-8">
-      <header className="flex items-baseline justify-between gap-4 border-b border-decree-ink/25 pb-3">
-        <p className="chrome text-decree-muted">{caseNo}</p>
-        <p className="chrome text-decree-muted">{DATE.format(date)}</p>
+      {/* Letterhead. A shared verdict is the whole distribution channel, so
+          the mark has to be on the artifact, not just on the page around it. */}
+      <header className="border-b border-decree-ink/25 pb-3">
+        <p className="display text-[1.375rem] text-stamp-deep">Terserah</p>
+        <div className="mt-1.5 flex items-baseline justify-between gap-4">
+          <p className="chrome text-decree-muted">{caseNo}</p>
+          <p className="chrome text-decree-muted">{DATE.format(date)}</p>
+        </div>
       </header>
 
       <p className="chrome mt-6 text-stamp-deep">Diputuskan</p>
@@ -52,8 +57,9 @@ export function Decree({
       </div>
 
       {/* In flow, not absolutely positioned: the stamp used to be anchored to
-          the card and landed on the domain line below 360px. A lifted block
-          still strikes across the reasoning without ever meeting it. */}
+          the card and landed on the domain line below 360px. Lifted just enough
+          to kiss the reasoning's last line — enough to read as struck onto the
+          sheet, not enough to swallow a word of the roast. */}
       <Stamp
         label={surrendered ? "Tanpa lawan" : "Final"}
         sub={
@@ -62,7 +68,7 @@ export function Decree({
             : "Tidak dapat diganggu gugat"
         }
         tone={surrendered ? "seal" : "stamp"}
-        className="animate-stamp pointer-events-none -mt-7 ml-auto mr-2 block w-[56%] max-w-[14.5rem] mix-blend-multiply sm:mr-4"
+        className="animate-stamp pointer-events-none -mt-3 ml-auto mr-2 block w-[56%] max-w-[14.5rem] mix-blend-multiply sm:mr-4"
       />
 
       {mapsQuery ? (

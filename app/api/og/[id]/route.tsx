@@ -35,6 +35,26 @@ export async function GET(
     textTransform: "uppercase" as const,
   };
 
+  // Every shared image carries the mark. On the ink branches it is pinned
+  // like a letterhead; on the sheet it is the document's own masthead.
+  const wordmark = (
+    <div
+      style={{
+        position: "absolute",
+        top: 52,
+        left: 80,
+        display: "flex",
+        fontFamily: "Anton",
+        fontSize: 30,
+        letterSpacing: 1,
+        textTransform: "uppercase",
+        color: STAMP,
+      }}
+    >
+      Terserah
+    </div>
+  );
+
   if (!room) {
     return new ImageResponse(
       (
@@ -44,10 +64,12 @@ export async function GET(
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
+            position: "relative",
             background: INK,
             padding: 80,
           }}
         >
+          {wordmark}
           <div style={{ ...label, color: MUTED, display: "flex" }}>
             Kepaniteraan
           </div>
@@ -80,11 +102,13 @@ export async function GET(
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
+            position: "relative",
             background: INK,
             padding: 80,
             borderTop: `14px solid ${STAMP}`,
           }}
         >
+          {wordmark}
           <div style={{ ...label, color: MUTED, display: "flex" }}>
             Surat panggilan · Perkara No. {id.toUpperCase()}
           </div>
@@ -158,16 +182,36 @@ export async function GET(
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              flexDirection: "column",
               borderBottom: `2px solid ${INK_LINE}33`,
               paddingBottom: 18,
             }}
           >
-            <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
-              Perkara No. {id.toUpperCase()}
+            <div
+              style={{
+                display: "flex",
+                fontFamily: "Anton",
+                fontSize: 34,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                color: STAMP_DEEP,
+              }}
+            >
+              Terserah
             </div>
-            <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
-              {SITE_DOMAIN}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginTop: 10,
+              }}
+            >
+              <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
+                Perkara No. {id.toUpperCase()}
+              </div>
+              <div style={{ ...label, color: DECREE_MUTED, display: "flex" }}>
+                {SITE_DOMAIN}
+              </div>
             </div>
           </div>
 

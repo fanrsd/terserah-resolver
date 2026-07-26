@@ -157,6 +157,27 @@ sub-line to 4.23:1.
 The landing renders the same component as a labelled specimen — it gives the page its
 visual anchor and shows cold traffic what they get, in one move.
 
+## The mark
+
+Two lockups, one identity, both derived from the stamp rather than invented beside it.
+
+**Wordmark** — `TERSERAH` in Anton, `--stamp-deep` on the sheet and `--stamp` on the
+ink. It sits as a *letterhead*: top-left of the decree, above the case-number row, the
+way a real summons carries its issuing court. It is not a logo dropped onto a page.
+
+**Initial** — a `--stamp` square with a `--decree` **T**, the stamp die reduced to what
+survives at 16px. The T is drawn as a path, not set in Anton: a favicon SVG cannot load
+a webfont, and Anton's true T (crossbar ≈ 0.5 × cap height) goes thin at tab size, so
+the letterform is optically corrected wider. `app/icon.svg` and `app/apple-icon.tsx`
+scale the same geometry — Safari ignores SVG for apple-touch-icon, so the raster is
+built from two blocks rather than a second, drifting drawing.
+
+**The mark ships on every shared image.** A verdict screenshotted into a group chat is
+the entire distribution channel, so the mark belongs on the artifact, not on the page
+around it. All four OG surfaces carry it: the landing (`app/opengraph-image.tsx`), the
+summons, the closed case, and the verdict sheet. The landing had no OG image at all
+until this was added — the bare domain shared as a text card with nothing on it.
+
 ## Motion
 
 One investment, one place: the beat between B's submit and the verdict.
