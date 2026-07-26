@@ -68,7 +68,9 @@ export default async function AdminRiwayat({
           />
           <Stat
             label="Median vonis"
-            value={stats.medianJudgeMs ? `${stats.medianJudgeMs} ms` : "—"}
+            value={
+              stats.medianJudgeMs === null ? "—" : `${stats.medianJudgeMs} ms`
+            }
           />
         </dl>
       ) : null}
