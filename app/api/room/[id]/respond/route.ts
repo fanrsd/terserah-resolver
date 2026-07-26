@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { recordVerdict } from "@/lib/history";
 import { judge } from "@/lib/judge";
 import {
   accept,
   cleanDealbreakers,
-  decide,
+  getRoom,
   isRoomId,
   protest,
-  store,
+  saveResponse,
+  saveVerdict,
 } from "@/lib/room";
 
 export async function POST(
@@ -19,7 +19,7 @@ export async function POST(
     return NextResponse.json({ error: "gone" }, { status: 404 });
   }
 
-  const room = await store().get(id);
+  const room = await getRoom(id);
   if (!room) return NextResponse.json({ error: "gone" }, { status: 404 });
 
   // Idempotent: a double tap, a retry, or a second tab must not buy another
@@ -46,14 +46,17 @@ export async function POST(
     return NextResponse.json({ error: "invalid" }, { status: 400 });
   }
 
-  // Persist before deliberating so A's screen can switch from "waiting" to
-  // "the judge is considering it" while the model runs.
-  await store().put(responded);
+  // Persist first, so A's screen can switch from "waiting" to "the judge is
+  // considering it" while the model runs. The write is guarded on the row
+  // still being `awaiting_b`, so if both parties respond at once exactly one
+  // wins and only one model call is ever bought.
+  if (!(await saveResponse(responded))) {
+    return NextResponse.json({ state: "taken" }, { status: 409 });
+  }
 
   const startedAt = Date.now();
   const verdict = await judge(responded);
-  await store().put(decide(responded, verdict));
-  await recordVerdict(responded, verdict, Date.now() - startedAt);
+  await saveVerdict(responded, verdict, Date.now() - startedAt);
 
   return NextResponse.json({ state: "decided" });
 }

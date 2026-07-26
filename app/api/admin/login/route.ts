@@ -17,7 +17,7 @@ export async function POST(request: Request) {
 
   // The one endpoint the middleware lets through unauthenticated, so it is the
   // one that has to survive a brute force.
-  if (await overRateLimit(request, "terserah:admin-login", 10, "15 m")) {
+  if (await overRateLimit(request, "terserah:admin-login", 10, 900)) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { ogFonts } from "@/lib/og-fonts";
 import { SITE_DOMAIN } from "@/lib/site";
-import { isRoomId, store } from "@/lib/room";
+import { getRoom, isRoomId } from "@/lib/room";
 
 // Satori has no CSS variables; these mirror app/globals.css exactly.
 const INK = "#150d0c";
@@ -21,7 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const room = isRoomId(id) ? await store().get(id) : null;
+  const room = isRoomId(id) ? await getRoom(id) : null;
 
   const fonts = ogFonts();
 

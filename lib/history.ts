@@ -1,4 +1,4 @@
-import type { Room, Verdict } from "./room.ts";
+import type { Room } from "./room.ts";
 import { supabase } from "./supabase.ts";
 
 export type CaseRow = {
@@ -30,50 +30,9 @@ export type Stats = {
 };
 
 /**
- * History is analytics, never a dependency of the user flow. Every call here
- * swallows its own failure: a broken Supabase must not cost anyone dinner.
+ * Read-only. The writes live in lib/room.ts, because a case row *is* the room:
+ * merging them removed a second write path that could silently diverge.
  */
-export async function recordCase(room: Room): Promise<void> {
-  const db = supabase();
-  if (!db) return;
-  try {
-    await db.from("cases").insert({
-      id: room.id,
-      city: room.city,
-      a_choice: room.aChoice,
-      state: room.state,
-      created_at: new Date(room.createdAt).toISOString(),
-    });
-  } catch {
-    // analytics only
-  }
-}
-
-export async function recordVerdict(
-  room: Room,
-  verdict: Verdict,
-  judgeMs: number,
-): Promise<void> {
-  const db = supabase();
-  if (!db) return;
-  try {
-    await db.from("cases")
-      .update({
-        state: "decided",
-        b_dealbreakers: room.bDealbreakers ?? null,
-        verdict_place: verdict.place,
-        verdict_reason: verdict.reasoning,
-        maps_query: verdict.mapsQuery,
-        fallback: Boolean(verdict.fallback),
-        place_verified: verdict.placeVerified ?? null,
-        judge_ms: judgeMs,
-        decided_at: new Date().toISOString(),
-      })
-      .eq("id", room.id);
-  } catch {
-    // analytics only
-  }
-}
 
 export const PAGE_SIZE = 25;
 

@@ -1,4 +1,4 @@
-import { Redis } from "@upstash/redis";
+import { supabase } from "./supabase.ts";
 
 export const ROOM_TTL_SECONDS = 60 * 60 * 24;
 
@@ -26,6 +26,7 @@ export type Room = {
   bDealbreakers?: string[];
   verdict?: Verdict;
   createdAt: number;
+  judgeMs?: number;
 };
 
 /** No 0/1/l/o to keep links dictatable over a phone call. */
@@ -45,62 +46,128 @@ export function isRoomId(value: string): boolean {
 
 /* ---------------------------------------------------------------- store -- */
 
-type Store = {
-  get(id: string): Promise<Room | null>;
-  put(room: Room): Promise<void>;
+/**
+ * Rooms live in Postgres, in the same `cases` row that carries the history.
+ *
+ * They used to live in Redis with the history written separately. On Cloudflare
+ * Workers there is no shared process memory, so the in-memory fallback made a
+ * room visible only to the isolate that created it — B, arriving from another
+ * network and therefore another colo, would be told the case was closed.
+ *
+ * Merging the two removed the duplicate write instead of adding a third store:
+ * one row per room, created when A opens the case and updated when it is
+ * decided. `expires_at` closes the room to users after 24h while the row stays
+ * for the admin history.
+ */
+type CaseRow = {
+  id: string;
+  city: string;
+  a_choice: string;
+  state: RoomState;
+  b_dealbreakers: string[] | null;
+  verdict_place: string | null;
+  verdict_reason: string | null;
+  maps_query: string | null;
+  fallback: boolean;
+  place_verified: boolean | null;
+  judge_ms: number | null;
+  created_at: string;
+  expires_at: string;
 };
 
-function upstash(url: string, token: string): Store {
-  const redis = new Redis({ url, token });
-  return {
-    async get(id) {
-      return (await redis.get<Room>(`room:${id}`)) ?? null;
-    },
-    async put(room) {
-      await redis.set(`room:${room.id}`, room, { ex: ROOM_TTL_SECONDS });
-    },
-  };
-}
-
-// ponytail: dev-only store so the app runs with an empty .env. Single process,
-// lost on restart. Swap to Upstash by setting the two env vars.
-function memory(): Store {
-  const rooms = new Map<string, { room: Room; expiresAt: number }>();
-  return {
-    async get(id) {
-      const hit = rooms.get(id);
-      if (!hit) return null;
-      if (Date.now() > hit.expiresAt) {
-        rooms.delete(id);
-        return null;
+function toRoom(row: CaseRow): Room {
+  const verdict: Verdict | undefined = row.verdict_place
+    ? {
+        place: row.verdict_place,
+        mapsQuery: row.maps_query ?? row.verdict_place,
+        reasoning: row.verdict_reason ?? "",
+        fallback: row.fallback,
+        placeVerified: row.place_verified ?? undefined,
       }
-      return hit.room;
-    },
-    async put(room) {
-      rooms.set(room.id, {
-        room,
-        expiresAt: Date.now() + ROOM_TTL_SECONDS * 1000,
-      });
-    },
+    : undefined;
+
+  return {
+    id: row.id,
+    city: row.city,
+    aChoice: row.a_choice,
+    state: row.state,
+    bDealbreakers: row.b_dealbreakers ?? undefined,
+    verdict,
+    createdAt: Date.parse(row.created_at),
+    judgeMs: row.judge_ms ?? undefined,
   };
 }
 
-const globalForStore = globalThis as unknown as { __terserahStore?: Store };
+export async function getRoom(id: string): Promise<Room | null> {
+  const db = supabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from("cases")
+    .select("*")
+    .eq("id", id)
+    .gt("expires_at", new Date().toISOString())
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toRoom(data as CaseRow);
+}
+
+export async function insertRoom(room: Room): Promise<boolean> {
+  const db = supabase();
+  if (!db) return false;
+
+  const { error } = await db.from("cases").insert({
+    id: room.id,
+    city: room.city,
+    a_choice: room.aChoice,
+    state: room.state,
+    created_at: new Date(room.createdAt).toISOString(),
+    expires_at: new Date(room.createdAt + ROOM_TTL_SECONDS * 1000).toISOString(),
+  });
+  return !error;
+}
 
 /**
- * Built lazily and memoized per isolate. On Cloudflare Workers `process.env`
- * is populated per request, so choosing the backend at module scope would
- * always pick the in-memory store.
+ * Guarded by the current state, so two people responding at once cannot both
+ * win: the update only applies while the row is still `awaiting_b`.
  */
-export function store(): Store {
-  if (globalForStore.__terserahStore) return globalForStore.__terserahStore;
+export async function saveResponse(room: Room): Promise<boolean> {
+  const db = supabase();
+  if (!db) return false;
 
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const { data, error } = await db
+    .from("cases")
+    .update({ state: room.state, b_dealbreakers: room.bDealbreakers ?? null })
+    .eq("id", room.id)
+    .eq("state", "awaiting_b")
+    .select("id");
 
-  globalForStore.__terserahStore =
-    url && token ? upstash(url, token) : memory();
-  return globalForStore.__terserahStore;
+  return !error && (data?.length ?? 0) > 0;
+}
+
+export async function saveVerdict(
+  room: Room,
+  verdict: Verdict,
+  judgeMs: number,
+): Promise<void> {
+  const db = supabase();
+  if (!db) return;
+
+  await db
+    .from("cases")
+    .update({
+      state: "decided",
+      verdict_place: verdict.place,
+      verdict_reason: verdict.reasoning,
+      maps_query: verdict.mapsQuery,
+      fallback: Boolean(verdict.fallback),
+      place_verified: verdict.placeVerified ?? null,
+      judge_ms: judgeMs,
+      decided_at: new Date().toISOString(),
+    })
+    .eq("id", room.id)
+    .neq("state", "decided");
 }
 
 /* -------------------------------------------------------- state machine -- */

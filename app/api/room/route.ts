@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { recordCase } from "@/lib/history";
 import { overRateLimit } from "@/lib/ratelimit";
 import { getSettings } from "@/lib/settings";
 import {
   cleanLine,
   createRoom,
+  insertRoom,
   MAX_CHOICE_LENGTH,
   MAX_CITY_LENGTH,
   ROOM_TTL_SECONDS,
-  store,
 } from "@/lib/room";
 
 export async function POST(request: Request) {
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
 
   // Public, unauthenticated, and every room costs a model call. Rate limiting
   // is the trust boundary, not an optimization.
-  if (await overRateLimit(request, "terserah:create", 5, "1 h")) {
+  if (await overRateLimit(request, "terserah:create", 5, 3600)) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
@@ -31,9 +30,10 @@ export async function POST(request: Request) {
   }
 
   const room = createRoom(choice, city);
-  await store().put(room);
-  // Awaited so the row exists before a fast responder tries to update it.
-  await recordCase(room);
+  // One write: the row is both the live room and its history entry.
+  if (!(await insertRoom(room))) {
+    return NextResponse.json({ error: "store_unavailable" }, { status: 503 });
+  }
 
   const response = NextResponse.json({ id: room.id });
   // Path-scoped: only the room page needs to know who opened the case.

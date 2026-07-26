@@ -1,6 +1,10 @@
--- Terserah — admin storage.
--- Rooms stay in Redis (hot, 24h TTL, polled every 2s). Supabase holds the two
--- things that must outlive a room: tunable settings and the case history.
+-- Terserah — the whole store.
+--
+-- `cases` is both the live room and its history: one row, created when A opens
+-- the case and updated when it is decided. Rooms were briefly in Redis, but on
+-- Cloudflare Workers there is no shared process memory, so a room was visible
+-- only to the isolate that made it. Merging removed a write rather than adding
+-- a store.
 --
 -- Run once in the Supabase SQL editor.
 
@@ -42,13 +46,30 @@ create table if not exists public.cases (
   place_verified  boolean,
   judge_ms        integer,
   created_at      timestamptz not null default now(),
-  decided_at      timestamptz
+  decided_at      timestamptz,
+  -- Closes the room to users after 24h. The row stays for the admin history,
+  -- which is why this is a column and not a TTL.
+  expires_at      timestamptz not null default (now() + interval '24 hours')
 );
 
 create index if not exists cases_created_at_idx on public.cases (created_at desc);
-create index if not exists cases_state_idx on public.cases (state);
+create index if not exists cases_state_idx      on public.cases (state);
+create index if not exists cases_expires_at_idx on public.cases (expires_at);
+
+-- Rate limiting without Redis. Cloudflare's native ratelimit binding only
+-- supports 10s and 60s windows, and "5 rooms per hour" does not fit.
+create table if not exists public.rate_hits (
+  id     bigserial primary key,
+  bucket text not null,
+  ip     text not null,
+  at     timestamptz not null default now()
+);
+
+create index if not exists rate_hits_lookup_idx
+  on public.rate_hits (bucket, ip, at desc);
 
 -- Every read and write goes through the service role from the server.
 -- Enabling RLS with no policies denies anon and authenticated outright.
-alter table public.settings enable row level security;
-alter table public.cases    enable row level security;
+alter table public.settings  enable row level security;
+alter table public.cases     enable row level security;
+alter table public.rate_hits enable row level security;

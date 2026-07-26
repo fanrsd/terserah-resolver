@@ -5,7 +5,7 @@ import { Decree } from "@/components/decree";
 import { RespondPanel } from "@/components/respond-panel";
 import { ShareRow } from "@/components/share-row";
 import { WaitPanel } from "@/components/wait-panel";
-import { isRoomId, store } from "@/lib/room";
+import { getRoom, isRoomId } from "@/lib/room";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const room = isRoomId(id) ? await store().get(id) : null;
+  const room = isRoomId(id) ? await getRoom(id) : null;
   if (!room) return { title: "Perkara sudah ditutup — Terserah" };
 
   const decided = room.state === "decided" && room.verdict;
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RoomPage({ params }: Props) {
   const { id } = await params;
-  const room = isRoomId(id) ? await store().get(id) : null;
+  const room = isRoomId(id) ? await getRoom(id) : null;
 
   if (!room) return <Closed />;
 

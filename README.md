@@ -22,27 +22,31 @@ npm run cf:preview # run it in workerd locally
 npm run cf:deploy  # ship to terserah.help
 ```
 
-Every integration is optional. With an empty `.env.local` the app still runs
-end-to-end — rooms live in memory, the judge returns its fallback verdict, and the
-admin panel stays locked. Copy `.env.example` and fill in what you have.
+Supabase is the only hard dependency. Everything else degrades: with just
+`SUPABASE_*` set the app runs end-to-end, the judge returns its fallback verdict,
+and the admin panel stays locked. Copy `.env.example` and fill in what you have.
 
 | Missing | What happens |
 |---|---|
-| `UPSTASH_REDIS_*` | in-memory room store, no rate limiting (dev only) |
 | all LLM keys | canned fallback verdict; the flow still demonstrates |
 | `SETTINGS_ENCRYPTION_KEY` | the admin can't store an endpoint key; env only |
 | `GOOGLE_PLACES_API_KEY` | no existence check; the Maps search link still works |
-| `SUPABASE_*` | default settings, no history recorded |
+| `SUPABASE_*` | **nothing works** — rooms, history and settings all live there |
 | `ADMIN_PASSWORD` | `/admin` refuses to open at all |
 
 ## Supabase
 
 Run [`supabase/schema.sql`](supabase/schema.sql) once in the SQL editor. It creates
-`settings` (singleton) and `cases` (history), and enables RLS with no policies — every
-access goes through the service role from the server, so anon is denied outright.
+`settings` (singleton), `cases` (rooms + history), and `rate_hits`, and enables RLS
+with no policies — every access goes through the service role from the server, so
+anon is denied outright, verified against all four verbs.
 
-Rooms deliberately do **not** live here. They are ephemeral, TTL'd, and polled every
-two seconds; that is a KV workload, and it stays in Redis.
+Rooms live here too. They were briefly in Redis — a KV workload on paper — but
+Cloudflare Workers has no shared process memory, so a room existed only inside the
+isolate that created it and B, arriving from another network and therefore another
+colo, was told the case was closed. `cases` now holds one row that is both the live
+room and its history entry, which removed a write rather than adding a store.
+`expires_at` closes it to users after 24h; the row stays for the admin.
 
 ## Admin
 
@@ -86,7 +90,7 @@ npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SETTINGS_ENCRYPTION_KEY
 # then whichever of GEMINI_API_KEY / LLM_API_KEY /
-# GOOGLE_PLACES_API_KEY / UPSTASH_REDIS_REST_{URL,TOKEN} you use
+# GOOGLE_PLACES_API_KEY you use
 ```
 
 Three things the Workers runtime forced, all of them worth knowing before editing:

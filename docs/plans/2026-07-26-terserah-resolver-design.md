@@ -135,11 +135,10 @@ The judge does not need them, and asking would move every call into the $32/1k b
 |---|---|---|
 | Framework | Next.js 15 App Router, TypeScript | SSR needed for OG meta tags on the shared link |
 | Styling | Tailwind v4 | tokens in CSS, no config file needed |
-| Rooms | Upstash Redis | rooms are ephemeral JSON with a TTL, polled every 2s — a KV workload. Putting them in Postgres would mean a schema, migrations, and a cleanup job for a payload that deletes itself in 24h |
-| Settings + history | Supabase Postgres | the two things that must outlive a room. Relational, queryable, durable — the opposite of the rooms workload, which is why both stores earn their place |
-| Realtime | client polling, 2s | Upstash has no subscriptions; SSE needs a route handler that polls Redis anyway, so it is strictly more code for a screen that waits ~60s |
+| Rooms + history + settings | Supabase Postgres | one store. Rooms were on Upstash Redis until Workers proved the premise wrong — see §3.1 |
+| Realtime | client polling, 2s | one screen waits for one event; SSE needs a handler polling the same row anyway, so it is strictly more code |
 | LLM | Gemini via raw `fetch` | structured output via `responseSchema` in the request body is ~20 lines; an SDK adds a dependency for nothing. Model and temperature are admin-tunable, not env-baked |
-| Rate limit | `@upstash/ratelimit` | same Redis, public unauthenticated LLM endpoint spends real money |
+| Rate limit | `rate_hits` table in Postgres | Cloudflare's native ratelimit binding only does 10s/60s windows and "5 per hour" does not fit. Supabase is already required, so this costs a table instead of a vendor |
 | OG image | `next/og` `ImageResponse` | the WhatsApp preview *is* the growth surface |
 | Place check | Places API Text Search, `places.id` field mask only | Nearby Search and any name-bearing field mask bill at Pro, $32/1k after 5k. IDs-only Text Search is unlimited and free — see §2. Optional: the app works without the key |
 | Admin auth | `ADMIN_PASSWORD` + HMAC-signed cookie | one admin. Supabase Auth would add a provider, a user table, and email config to gate a single person. Web Crypto so the same module runs in edge middleware |
@@ -150,11 +149,29 @@ end-user accounts, an ORM, Supabase Auth, and any Places call that returns a nam
 
 ### 3.1 What Cloudflare Workers changed
 
-Three constraints, each of which would have shipped as a silent production bug:
+Four constraints, each of which would have shipped as a silent production bug.
+Three were caught before deploying; the fourth was caught *by* deploying.
+
+**No shared memory between isolates — found in production.** With Upstash never
+provisioned, the room store fell back to an in-process `Map`. On one Node server
+that is a documented dev-only compromise. On Workers it is a broken product: a room
+is visible only to the isolate that created it, so it survives a burst of requests
+from one machine and then vanishes, and B — on another network, therefore another
+colo — is told the case was closed. The entire mechanic is "A sends B a link", so
+this failed exactly where it mattered and nowhere the earlier local testing looked.
+
+The fix deleted a store instead of adding one. `cases` already carried a row per
+room for history, written separately from the room itself; the room now *is* that
+row. One write on create instead of two, strongly consistent, and the history can no
+longer silently diverge from the thing it records. `expires_at` closes a room to
+users after 24h while the row stays for the admin.
+
+That also removed both Upstash packages: rate limiting moved to a `rate_hits` table,
+since Cloudflare's native ratelimit binding only supports 10s and 60s windows.
 
 **Env is per-request.** `process.env` is populated when a request arrives, not at
 isolate start, so every module-scope read captured `undefined`. The Supabase client,
-both rate limiters, and the room store are now built lazily and memoized per isolate;
+the rate limiter, and the room store are now built lazily and memoized per isolate;
 `hasAdmin`, `canStoreSecrets`, and `hasSupabase` became functions. The worst case was
 `middleware.ts`, which imports the auth module and evaluates early — a module-scope
 read there would have locked the admin panel shut on every deploy.
@@ -172,13 +189,14 @@ code path under `next dev`, `next build`, and workerd; no binding, no network.
 **Bundle size is a budget.** 2.0 MiB gzipped against a 3 MiB limit, ~130 KiB of that
 the inlined fonts. `wrangler deploy --dry-run` reports it.
 
-Rooms stay on Upstash Redis rather than moving to KV or Durable Objects. KV is
-eventually consistent, which breaks a room polled every two seconds, and neither
-swap was asked for. Upstash speaks HTTP and works unchanged on Workers.
+Rooms did **not** stay on Redis. KV was rejected too — eventually consistent, which
+breaks a room polled every two seconds — and Durable Objects would have been a new
+concept for something Postgres already holds correctly.
 
 ### Data model
 
-One Redis key per room, `room:<slug>`, `EX 86400`.
+One `cases` row per room, closed to users by `expires_at` after 24h and kept
+afterwards for the admin history.
 
 ```ts
 type Room = {

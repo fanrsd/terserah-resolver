@@ -1,42 +1,51 @@
-import { Ratelimit, type Duration } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+import { supabase } from "./supabase.ts";
 
 /**
- * Memoized per isolate and built on first use. On Cloudflare Workers
- * `process.env` is populated per request, so a module-scope `Redis.fromEnv()`
- * would throw or silently produce an unusable client at isolate start.
+ * Rate limiting on Postgres rather than Redis.
  *
- * Without Redis there is no limiter and nothing is limited — acceptable in
- * local dev, which is the only place that configuration should ever happen.
+ * Upstash was never provisioned, and Cloudflare's native ratelimit binding only
+ * supports 10s and 60s windows — "5 rooms per hour" does not fit. Supabase is
+ * already a hard dependency, so this costs one table instead of one vendor.
+ *
+ * Fails open: if the count query errors the request proceeds. A limiter that
+ * takes the site down when the database hiccups is worse than the abuse it
+ * prevents, and the endpoints behind it are already cheap.
  */
-const cache = globalThis as unknown as {
-  __terserahLimiters?: Map<string, Ratelimit>;
-};
-
 export async function overRateLimit(
   request: Request,
-  prefix: string,
-  tokens: number,
-  window: Duration,
+  bucket: string,
+  limit: number,
+  windowSeconds: number,
 ): Promise<boolean> {
-  if (!process.env.UPSTASH_REDIS_REST_URL) return false;
-  if (!process.env.UPSTASH_REDIS_REST_TOKEN) return false;
-
-  const limiters = (cache.__terserahLimiters ??= new Map());
-  let limiter = limiters.get(prefix);
-  if (!limiter) {
-    limiter = new Ratelimit({
-      redis: Redis.fromEnv(),
-      limiter: Ratelimit.slidingWindow(tokens, window),
-      prefix,
-    });
-    limiters.set(prefix, limiter);
-  }
+  const db = supabase();
+  if (!db) return false;
 
   const ip =
     request.headers.get("cf-connecting-ip") ??
     request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
     "unknown";
 
-  return !(await limiter.limit(ip)).success;
+  const since = new Date(Date.now() - windowSeconds * 1000).toISOString();
+
+  const { count, error } = await db
+    .from("rate_hits")
+    .select("id", { count: "exact", head: true })
+    .eq("bucket", bucket)
+    .eq("ip", ip)
+    .gt("at", since);
+
+  if (error) return false;
+  if ((count ?? 0) >= limit) return true;
+
+  await db.from("rate_hits").insert({ bucket, ip });
+
+  // Opportunistic cleanup: no cron, and the table stays small on its own.
+  if (Math.random() < 0.02) {
+    await db
+      .from("rate_hits")
+      .delete()
+      .lt("at", new Date(Date.now() - 86_400_000).toISOString());
+  }
+
+  return false;
 }
