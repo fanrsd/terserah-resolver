@@ -1,30 +1,53 @@
 "use client";
 
 import { useState } from "react";
-import { DEFAULT_PERSONA, LIMITS, type Settings } from "@/lib/settings-schema";
+import {
+  DEFAULT_PERSONA,
+  ENDPOINT_PRESETS,
+  LIMITS,
+  type Settings,
+} from "@/lib/settings-schema";
 
-const MODELS = [
+const GEMINI_MODELS = [
   "gemini-2.5-flash",
   "gemini-2.5-flash-lite",
   "gemini-2.5-pro",
-] as const;
+];
+
+type Probe =
+  | { state: "idle" | "running" }
+  | { state: "ok"; ms: number; place: string; reasoning: string }
+  | { state: "fail"; reason: string };
 
 export function SettingsForm({
   initial,
   disabled,
+  keyStored,
+  canStoreSecrets,
 }: {
   initial: Settings;
   disabled: boolean;
+  keyStored: boolean;
+  canStoreSecrets: boolean;
 }) {
   const [form, setForm] = useState(initial);
+  // undefined = leave the stored key alone, "" via Hapus = clear it.
+  const [apiKey, setApiKey] = useState<string | null | undefined>(undefined);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  const [errorText, setErrorText] = useState("");
+  const [probe, setProbe] = useState<Probe>({ state: "idle" });
+
+  const custom = form.provider === "openai";
 
   const patch = (next: Partial<Settings>) => {
     setForm((previous) => ({ ...previous, ...next }));
     setStatus("idle");
+    setProbe({ state: "idle" });
   };
+
+  const payload = () => ({ ...form, apiKey });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -34,34 +57,186 @@ export function SettingsForm({
     const response = await fetch("/api/admin/settings", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload()),
     }).catch(() => null);
-    setStatus(response?.ok ? "saved" : "error");
+
+    if (response?.ok) {
+      setStatus("saved");
+      setApiKey(undefined);
+      return;
+    }
+    const reason = await response?.json().catch(() => null);
+    setErrorText(
+      reason?.error === "no_encryption_key"
+        ? "SETTINGS_ENCRYPTION_KEY belum diset, jadi API key tidak akan disimpan dalam bentuk terenkripsi."
+        : reason?.error === "invalid"
+          ? "Isian tidak valid. Cek base URL dan model."
+          : "Gagal menyimpan. Cek koneksi Supabase.",
+    );
+    setStatus("error");
+  }
+
+  async function test() {
+    setProbe({ state: "running" });
+    const response = await fetch("/api/admin/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload()),
+    }).catch(() => null);
+
+    const result = await response?.json().catch(() => null);
+    if (result?.ok) {
+      setProbe({
+        state: "ok",
+        ms: result.ms,
+        place: result.place,
+        reasoning: result.reasoning,
+      });
+    } else {
+      setProbe({ state: "fail", reason: result?.reason ?? "tidak bisa dihubungi" });
+    }
   }
 
   return (
     <form onSubmit={submit} noValidate className="mt-8 grid gap-8">
       <fieldset disabled={disabled} className="grid gap-8">
+        <div>
+          <p className="chrome">Penyedia</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Choice
+              checked={!custom}
+              onSelect={() => patch({ provider: "gemini" })}
+              label="Gemini langsung"
+              hint="API native, key dari env"
+            />
+            <Choice
+              checked={custom}
+              onSelect={() =>
+                patch({
+                  provider: "openai",
+                  baseUrl: form.baseUrl || ENDPOINT_PRESETS[1].baseUrl,
+                  model: form.baseUrl ? form.model : ENDPOINT_PRESETS[1].model,
+                })
+              }
+              label="Endpoint sendiri"
+              hint="Apa pun yang OpenAI-compatible"
+            />
+          </div>
+        </div>
+
+        {custom ? (
+          <div className="grid gap-6 border-l-0 border-t border-ink-line pt-6">
+            <div>
+              <label htmlFor="baseUrl" className="chrome block">
+                Base URL
+              </label>
+              <input
+                id="baseUrl"
+                value={form.baseUrl}
+                maxLength={LIMITS.baseUrlMax}
+                placeholder="https://openrouter.ai/api/v1"
+                spellCheck={false}
+                autoComplete="off"
+                aria-describedby="baseUrl-hint"
+                onChange={(event) => patch({ baseUrl: event.target.value })}
+                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+              />
+              <p id="baseUrl-hint" className="mt-2 text-xs font-normal text-muted">
+                Boleh berakhir di <code>/v1</code> atau langsung di{" "}
+                <code>/v1/chat/completions</code> — dua-duanya diterima.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {ENDPOINT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() =>
+                      patch({ baseUrl: preset.baseUrl, model: preset.model })
+                    }
+                    className="chrome border border-ink-line px-3 py-2 text-muted transition-colors duration-150 hover:border-stamp hover:text-stamp-lift"
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <label htmlFor="apiKey" className="chrome">
+                  API key
+                </label>
+                {keyStored && apiKey !== null ? (
+                  <button
+                    type="button"
+                    onClick={() => setApiKey(null)}
+                    className="chrome text-muted transition-colors duration-150 hover:text-stamp-lift"
+                  >
+                    Hapus key tersimpan
+                  </button>
+                ) : null}
+              </div>
+              <input
+                id="apiKey"
+                type="password"
+                value={typeof apiKey === "string" ? apiKey : ""}
+                maxLength={LIMITS.apiKeyMax}
+                autoComplete="off"
+                spellCheck={false}
+                disabled={!canStoreSecrets}
+                aria-describedby="apiKey-hint"
+                placeholder={
+                  apiKey === null
+                    ? "Akan dihapus saat disimpan"
+                    : keyStored
+                      ? "Tersimpan — isi untuk mengganti"
+                      : "sk-…"
+                }
+                onChange={(event) => {
+                  setApiKey(event.target.value || undefined);
+                  setStatus("idle");
+                }}
+                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none disabled:text-muted"
+              />
+              <p id="apiKey-hint" className="mt-2 max-w-[68ch] text-xs font-normal text-muted">
+                {canStoreSecrets
+                  ? "Disimpan terenkripsi (AES-GCM); kunci utamanya ada di env, bukan di database. Tidak pernah dikirim balik ke browser. Kosongkan untuk memakai LLM_API_KEY dari env."
+                  : "SETTINGS_ENCRYPTION_KEY belum diset, jadi field ini dimatikan. Pakai LLM_API_KEY di env, atau set kunci enkripsinya supaya key bisa diatur dari sini."}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         <div className="grid gap-6 sm:grid-cols-2">
           <div>
             <label htmlFor="model" className="chrome block">
               Model
             </label>
-            <select
-              id="model"
-              value={form.model}
-              onChange={(event) => patch({ model: event.target.value })}
-              className="mt-2 w-full border-b-2 border-ink-line bg-ink pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
-            >
-              {MODELS.map((model) => (
-                <option key={model} value={model}>
-                  {model}
-                </option>
-              ))}
-              {MODELS.includes(form.model as (typeof MODELS)[number]) ? null : (
-                <option value={form.model}>{form.model}</option>
-              )}
-            </select>
+            {custom ? (
+              <input
+                id="model"
+                value={form.model}
+                maxLength={LIMITS.modelMax}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="google/gemini-2.5-flash"
+                onChange={(event) => patch({ model: event.target.value })}
+                className="mt-2 w-full border-b-2 border-ink-line bg-transparent pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+              />
+            ) : (
+              <select
+                id="model"
+                value={form.model}
+                onChange={(event) => patch({ model: event.target.value })}
+                className="mt-2 w-full border-b-2 border-ink-line bg-ink pb-2 text-lg text-bone focus:border-stamp focus:outline-none"
+              >
+                {[...new Set([...GEMINI_MODELS, form.model])].map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+            )}
             <p className="mt-2 text-xs font-normal text-muted">
               Flash cukup dan murah. Pro lebih tajam sarkasmenya tapi lebih
               lambat, dan layar ini sudah punya jeda 2,4 detik.
@@ -148,6 +323,14 @@ export function SettingsForm({
         >
           {status === "saving" ? "Menyimpan…" : "Simpan"}
         </button>
+        <button
+          type="button"
+          onClick={test}
+          disabled={probe.state === "running"}
+          className="chrome border border-ink-line px-4 py-3 text-bone transition-colors duration-150 hover:border-stamp hover:text-stamp-lift disabled:text-muted"
+        >
+          {probe.state === "running" ? "Menguji…" : "Uji koneksi"}
+        </button>
         <p
           role="status"
           aria-live="polite"
@@ -158,11 +341,67 @@ export function SettingsForm({
           {status === "saved"
             ? "Tersimpan. Berlaku dalam 30 detik."
             : status === "error"
-              ? "Gagal menyimpan. Cek koneksi Supabase."
+              ? errorText
               : "\u00a0"}
         </p>
       </div>
+
+      {probe.state === "ok" || probe.state === "fail" ? (
+        <div
+          role="status"
+          className={`border p-4 text-sm font-normal ${
+            probe.state === "ok"
+              ? "border-seal/60 bg-seal/10 text-bone"
+              : "border-stamp/60 bg-stamp/10 text-bone"
+          }`}
+        >
+          {probe.state === "ok" ? (
+            <>
+              <p className="chrome text-seal">Terhubung · {probe.ms} ms</p>
+              <p className="mt-2 text-bone">
+                Vonis uji: <span className="text-seal">{probe.place}</span>
+              </p>
+              <p className="mt-1 max-w-[68ch] text-muted">{probe.reasoning}</p>
+            </>
+          ) : (
+            <>
+              <p className="chrome text-stamp-lift">Gagal</p>
+              <p className="mt-2 max-w-[68ch] text-muted">{probe.reason}</p>
+            </>
+          )}
+        </div>
+      ) : null}
     </form>
+  );
+}
+
+function Choice({
+  checked,
+  onSelect,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={checked}
+      className={`flex-1 min-w-[14rem] border px-4 py-3 text-left transition-colors duration-150 ${
+        checked
+          ? "border-stamp bg-stamp/10"
+          : "border-ink-line hover:border-muted"
+      }`}
+    >
+      <span className={`block text-base ${checked ? "text-bone" : "text-muted"}`}>
+        {label}
+      </span>
+      <span className="mt-0.5 block text-xs font-normal text-muted">{hint}</span>
+    </button>
   );
 }
 

@@ -99,3 +99,17 @@ test("verdict parser rejects malformed model output", () => {
   assert.throws(() => parseVerdict('{"place":"","reasoning":"x"}'));
   assert.throws(() => parseVerdict('{"place":"Warung","reasoning":"   "}'));
 });
+
+test("model output survives code fences and surrounding chatter", () => {
+  const body =
+    '{"place":"ramen ya","maps_query":"Ramen Ya, Tangerang","reasoning":"Ribet."}';
+
+  // Local OpenAI-compatible servers wrap JSON in fences or narrate around it.
+  assert.equal(parseVerdict("```json\n" + body + "\n```").place, "RAMEN YA");
+  assert.equal(parseVerdict("```\n" + body + "\n```").place, "RAMEN YA");
+  assert.equal(parseVerdict("Tentu! " + body).place, "RAMEN YA");
+  assert.equal(parseVerdict(body).mapsQuery, "Ramen Ya, Tangerang");
+
+  assert.throws(() => parseVerdict("maaf, saya tidak bisa"));
+  assert.throws(() => parseVerdict("```json\n{ broken\n```"));
+});

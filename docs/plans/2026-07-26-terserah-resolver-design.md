@@ -281,6 +281,7 @@ Tunable at runtime, cached 30s so the hot path stays off the network:
 | Setting | Why it's worth a knob |
 |---|---|
 | `persona` | the system prompt is the product; iterating it is the main job |
+| `provider` + `base_url` | any OpenAI-compatible endpoint, see below |
 | `model` | Flash vs Pro is a real cost/sharpness trade |
 | `temperature` | below 0.7 the verdicts flatten, above 1.4 the model invents places |
 | `place_check` | cost/latency control on the free existence check |
@@ -290,10 +291,35 @@ A blank persona restores the shipped default rather than saving an empty system
 prompt — the "roast both parties" rule is load-bearing and must not be removable by
 clearing a textarea.
 
-**Deliberately not configurable.** API keys stay in env: a secret in a database the
-app reads is worse than a secret in env, and UI rotation is not a real need for one
-admin. The Places field mask is hardcoded to `places.id` forever — any name-bearing
-field moves every call from free to $32/1k. The rate limit is a deploy decision.
+### Custom endpoints
+
+Two adapters share one prompt and one parser: Gemini's native API, and any
+OpenAI-compatible `/chat/completions`. Gemini native stays because it is the
+zero-config default and its `responseSchema` is the most reliable structured output
+available; the compatible adapter is what makes the provider a choice rather than a
+deploy-time constant.
+
+**Structured output degrades instead of exposing a knob.** Support is uneven across
+OpenAI, OpenRouter, Groq, vLLM, Ollama, and LM Studio, so the adapter tries
+`json_schema`, falls back to `json_object` on a 400/422, then to plain text, and the
+parser digs JSON out of a code fence. An admin should not have to know which tier
+their server implements.
+
+`Uji koneksi` runs one real verdict against the unsaved form. A typo'd base URL is
+the most likely failure mode here, and without the button it surfaces as a fallback
+verdict for a real couple. Its error messages name the fix, not the exception.
+
+**Reversal: the endpoint key is now storable.** The earlier rule — secrets never in
+the database — assumed the only key was Gemini's, set once at deploy. Once the admin
+can point at an arbitrary endpoint, a key they cannot change without a redeploy makes
+that half a feature. Resolved by encrypting it: AES-GCM, master key in
+`SETTINGS_ENCRYPTION_KEY`, so a Supabase snapshot alone does not read it, and the
+value never returns to the browser. Absent the master key the field is disabled
+rather than degrading to plaintext. The Gemini key stays env-only.
+
+**Still not configurable.** The Places field mask is hardcoded to `places.id`
+forever — any name-bearing field moves every call from free to $32/1k. The rate limit
+is a deploy decision.
 
 ### Auth
 
@@ -323,17 +349,26 @@ chat on top, the app issuing its verdict below.
 
 ## 7. Verification
 
-**Automated** (`npm test`, 12 tests, node:test):
+**Automated** (`npm test`, 18 tests, node:test):
 
 - Room state machine: the second responder loses, `decided` is terminal so a retry
   cannot buy a second model call, ids avoid lookalike characters, input cleaning and
   the exactly-three-dealbreakers rule.
-- Verdict parser rejects malformed model output rather than letting it reach a screen.
+- Verdict parser rejects malformed output and still recovers JSON from a code fence
+  or from a model that narrates before answering.
 - Admin auth: wrong password, tampered signature, an expiry extended without
   re-signing, and a genuinely expired token are all rejected.
-- Settings input validation, including that a blank persona restores the default.
-- Supabase wiring against a stub PostgREST server: the query shape, the blank-persona
-  fallback, the 30s cache, and invalidation on save.
+- Settings validation, including that a blank persona restores the default and that a
+  custom endpoint without a parseable http(s) base URL is refused at the boundary
+  rather than falling back on every case.
+- Base URL normalization for `/v1`, `/v1/`, trailing slashes, and a full
+  `/chat/completions` path.
+- Key handling: AES-GCM round-trip, a fresh IV per call, and null on tampered,
+  truncated, or junk blobs. The three-state input, so editing the persona cannot wipe
+  a stored key.
+- Supabase wiring against a stub PostgREST server: query shape, blank-persona
+  fallback, the 30s cache, invalidation on save, that the plaintext key never reaches
+  the wire, and that the cipher never rides along in `getSettings()`.
 
 **Exercised in-browser** (Chromium, 320 / 390 / 1280px):
 
@@ -345,12 +380,19 @@ chat on top, the app issuing its verdict below.
   password reports itself, correct password lands on riwayat.
 - Riwayat table, stats strip, and all four filters against seeded rows; settings save
   round-tripping to the store; `paused` actually returning 503 to the public form.
+- A full case decided through a custom OpenAI-compatible endpoint, against a mock
+  local server that rejects `json_schema` and answers with fenced JSON: the adapter
+  degraded to `json_object`, parsed the fence, and rendered a real decree. The key
+  was read back decrypted from storage; the stored row held ciphertext only.
+- `Uji koneksi` against a refused port, a bad hostname, and forced 401/404/429/500 —
+  each produced its own actionable message, and the key was never echoed back.
 - `prefers-reduced-motion` path, and zero horizontal overflow at 320px.
 - Every color pair measured for contrast, not estimated — three failures found and
   fixed (`--stamp-deep`, `--seal-deep`, and small red text moved to `--stamp-lift`).
 
-**Not yet verified:** a live Gemini key, a live Places key, and a real Supabase
-project. All three ran against stubs or their documented degradation path.
+**Not yet verified:** a live Gemini key, a live Places key, a real hosted provider,
+and a real Supabase project. All ran against stubs, mocks, or their documented
+degradation path.
 
 ---
 

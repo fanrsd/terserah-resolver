@@ -1,24 +1,78 @@
 import assert from "node:assert/strict";
-import { createServer, type Server } from "node:http";
-import { after, before, test } from "node:test";
+import { createServer } from "node:http";
+import { after, test } from "node:test";
 import {
+  completionsUrl,
   DEFAULT_PERSONA,
   LIMITS,
   normalizeSettings,
+  readApiKey,
 } from "../lib/settings-schema.ts";
 
-process.env.ADMIN_PASSWORD = "correct horse battery staple";
+/*
+ * lib/admin-auth, lib/secret, and lib/supabase all read their config at
+ * module-evaluation time, so every env var they need must be set before the
+ * first import of any of them — including transitive ones. Hence the stub
+ * server starts here at the top rather than in a `before` hook, and the three
+ * modules below are imported dynamically. A static import would hoist above
+ * these assignments and silently capture the unconfigured defaults.
+ */
 
-// Dynamic: both modules read their config at module-evaluation time, so the
-// env has to be set first. A static import hoists above these assignments.
+process.env.ADMIN_PASSWORD = "correct horse battery staple";
+process.env.SETTINGS_ENCRYPTION_KEY = "a-master-key-long-enough";
+
+let received: { method: string; url: string; body: string }[] = [];
+
+const server = createServer((request, response) => {
+  let body = "";
+  request.on("data", (chunk) => (body += chunk));
+  request.on("end", () => {
+    received.push({
+      method: request.method ?? "",
+      url: request.url ?? "",
+      body,
+    });
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      request.method === "GET"
+        ? JSON.stringify({
+            provider: "gemini",
+            base_url: "",
+            model: "gemini-2.5-pro",
+            temperature: 0.4,
+            persona: "   ",
+            place_check: false,
+            paused: true,
+            api_key_cipher: null,
+          })
+        : "[]",
+    );
+  });
+});
+
+const listening = Promise.withResolvers<void>();
+server.listen(0, listening.resolve);
+await listening.promise;
+after(() => server.close());
+
+const address = server.address();
+assert.ok(address && typeof address === "object", "server must have a port");
+process.env.SUPABASE_URL = `http://127.0.0.1:${address.port}`;
+process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+
 const auth = await import("../lib/admin-auth.ts");
+const secret = await import("../lib/secret.ts");
+const settings = await import("../lib/settings.ts");
 
 /* ------------------------------------------------------------- admin auth -- */
 
 test("only the exact password is accepted", async () => {
   assert.equal(await auth.checkPassword("correct horse battery staple"), true);
   assert.equal(await auth.checkPassword("correct horse battery stapl"), false);
-  assert.equal(await auth.checkPassword("correct horse battery staple "), false);
+  assert.equal(
+    await auth.checkPassword("correct horse battery staple "),
+    false,
+  );
   assert.equal(await auth.checkPassword(""), false);
   assert.equal(await auth.checkPassword(undefined), false);
   assert.equal(await auth.checkPassword(null), false);
@@ -33,15 +87,13 @@ test("tampered and expired tokens are rejected", async () => {
   const token = await auth.issueToken();
   const [exp, signature] = token.split(".");
 
-  // Signature flipped.
   const flipped = signature[0] === "a" ? "b" : "a";
   assert.equal(
     await auth.verifyToken(`${exp}.${flipped}${signature.slice(1)}`),
     false,
   );
 
-  // Expiry pushed out without re-signing: the expiry is inside the payload,
-  // so extending it invalidates the signature.
+  // The expiry is inside the signed payload, so extending it breaks the mac.
   assert.equal(
     await auth.verifyToken(`${Number(exp) + 86400}.${signature}`),
     false,
@@ -49,8 +101,7 @@ test("tampered and expired tokens are rejected", async () => {
 
   // Genuinely expired, correctly signed for its own past expiry.
   const past = Math.floor(Date.now() / 1000) - 10;
-  const stale = await auth.issueToken();
-  assert.equal(await auth.verifyToken(`${past}.${stale.split(".")[1]}`), false);
+  assert.equal(await auth.verifyToken(`${past}.${signature}`), false);
 
   assert.equal(await auth.verifyToken(""), false);
   assert.equal(await auth.verifyToken("garbage"), false);
@@ -61,20 +112,24 @@ test("tampered and expired tokens are rejected", async () => {
 /* ---------------------------------------------------------- settings input -- */
 
 test("settings input is validated at the trust boundary", () => {
-  const good = normalizeSettings({
-    model: " gemini-2.5-pro ",
-    temperature: 0.8,
-    persona: "  jadilah hakim  ",
-    placeCheck: true,
-    paused: false,
-  });
-  assert.deepEqual(good, {
-    model: "gemini-2.5-pro",
-    temperature: 0.8,
-    persona: "jadilah hakim",
-    placeCheck: true,
-    paused: false,
-  });
+  assert.deepEqual(
+    normalizeSettings({
+      model: " gemini-2.5-pro ",
+      temperature: 0.8,
+      persona: "  jadilah hakim  ",
+      placeCheck: true,
+      paused: false,
+    }),
+    {
+      provider: "gemini",
+      baseUrl: "",
+      model: "gemini-2.5-pro",
+      temperature: 0.8,
+      persona: "jadilah hakim",
+      placeCheck: true,
+      paused: false,
+    },
+  );
 
   // A blank persona restores the shipped prompt rather than disarming the judge.
   assert.equal(
@@ -106,49 +161,90 @@ test("settings input is validated at the trust boundary", () => {
   );
 });
 
-/* -------------------------------------------------------- supabase wiring -- */
+/* ------------------------------------------------------- custom endpoints -- */
 
-let server: Server;
-let received: { method: string; url: string; body: string }[] = [];
-
-before(async () => {
-  server = createServer((request, response) => {
-    let body = "";
-    request.on("data", (chunk) => (body += chunk));
-    request.on("end", () => {
-      received.push({
-        method: request.method ?? "",
-        url: request.url ?? "",
-        body,
-      });
-      response.writeHead(200, { "content-type": "application/json" });
-      response.end(
-        request.method === "GET"
-          ? JSON.stringify({
-              model: "gemini-2.5-pro",
-              temperature: 0.4,
-              persona: "   ",
-              place_check: false,
-              paused: true,
-            })
-          : "[]",
-      );
-    });
+test("a custom endpoint must carry a usable base URL", () => {
+  const good = normalizeSettings({
+    provider: "openai",
+    baseUrl: " https://openrouter.ai/api/v1 ",
+    model: "google/gemini-2.5-flash",
+    temperature: 1,
+    persona: "p",
   });
-  const listening = Promise.withResolvers<void>();
-  server.listen(0, listening.resolve);
-  await listening.promise;
+  assert.equal(good?.provider, "openai");
+  assert.equal(good?.baseUrl, "https://openrouter.ai/api/v1");
 
-  const address = server.address();
-  assert.ok(address && typeof address === "object", "server must have a port");
-  process.env.SUPABASE_URL = `http://127.0.0.1:${address.port}`;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+  // Accepting these would mean every case quietly falls back instead.
+  const bad = { provider: "openai", model: "m", temperature: 1 };
+  assert.equal(normalizeSettings({ ...bad, baseUrl: "" }), null);
+  assert.equal(normalizeSettings({ ...bad, baseUrl: "openrouter.ai/v1" }), null);
+  assert.equal(normalizeSettings({ ...bad, baseUrl: "ftp://host/v1" }), null);
+  assert.equal(normalizeSettings({ ...bad, baseUrl: "not a url" }), null);
+
+  // A blank base URL is fine when the provider doesn't use one, and anything
+  // that isn't "openai" falls back to the native provider.
+  assert.equal(
+    normalizeSettings({ provider: "gemini", baseUrl: "", model: "m", temperature: 1 })
+      ?.provider,
+    "gemini",
+  );
+  assert.equal(
+    normalizeSettings({ provider: "anthropic", model: "m", temperature: 1 })
+      ?.provider,
+    "gemini",
+  );
 });
 
-after(() => server.close());
+test("base URLs normalize to the completions path either way", () => {
+  const want = "https://api.openai.com/v1/chat/completions";
+  assert.equal(completionsUrl("https://api.openai.com/v1"), want);
+  assert.equal(completionsUrl("https://api.openai.com/v1/"), want);
+  assert.equal(completionsUrl("https://api.openai.com/v1///"), want);
+  assert.equal(completionsUrl("  https://api.openai.com/v1  "), want);
+  assert.equal(completionsUrl(want), want);
+  assert.equal(
+    completionsUrl("http://localhost:11434/v1"),
+    "http://localhost:11434/v1/chat/completions",
+  );
+});
+
+test("api key input is three-state so an edit cannot wipe the key", () => {
+  assert.equal(readApiKey({ apiKey: "sk-live" }), "sk-live");
+  assert.equal(readApiKey({ apiKey: "  sk-live  " }), "sk-live");
+  assert.equal(readApiKey({ apiKey: null }), null); // explicit clear
+  assert.equal(readApiKey({ apiKey: "" }), undefined); // blank = leave alone
+  assert.equal(readApiKey({ apiKey: "   " }), undefined);
+  assert.equal(readApiKey({}), undefined); // absent = leave alone
+  assert.equal(readApiKey({ apiKey: 42 }), undefined);
+  assert.equal(readApiKey(null), undefined);
+});
+
+test("stored keys round-trip and reject tampering", async () => {
+  assert.equal(secret.canStoreSecrets, true);
+
+  const cipher = await secret.encryptSecret("sk-super-secret");
+  assert.ok(cipher);
+  assert.equal(cipher.includes("sk-super-secret"), false);
+  assert.equal(await secret.decryptSecret(cipher), "sk-super-secret");
+
+  // A fresh IV per call, so identical plaintext never yields identical blobs.
+  assert.notEqual(await secret.encryptSecret("sk-super-secret"), cipher);
+
+  // Tampered, truncated, and junk blobs return null instead of throwing.
+  const flipped = cipher[20] === "A" ? "B" : "A";
+  assert.equal(
+    await secret.decryptSecret(cipher.slice(0, 20) + flipped + cipher.slice(21)),
+    null,
+  );
+  assert.equal(await secret.decryptSecret(cipher.slice(0, 8)), null);
+  assert.equal(await secret.decryptSecret("not base64 at all!!"), null);
+  assert.equal(await secret.decryptSecret(null), null);
+  assert.equal(await secret.encryptSecret(""), null);
+});
+
+/* -------------------------------------------------------- supabase wiring -- */
 
 test("settings are read from supabase and blanks fall back", async () => {
-  const settings = await import("../lib/settings.ts");
   received = [];
 
   const value = await settings.getSettings();
@@ -159,6 +255,8 @@ test("settings are read from supabase and blanks fall back", async () => {
   assert.equal(value.paused, true);
   // Whitespace-only persona in the DB must not disarm the judge.
   assert.equal(value.persona, DEFAULT_PERSONA);
+  // The stored cipher must never ride along to a caller that may serialize it.
+  assert.equal("apiKeyCipher" in value, false);
 
   const request = received.at(-1);
   assert.equal(request?.method, "GET");
@@ -169,16 +267,38 @@ test("settings are read from supabase and blanks fall back", async () => {
   received = [];
   await settings.getSettings();
   assert.equal(received.length, 0);
+});
 
-  // Saving invalidates, so the next read goes back out.
-  await settings.saveSettings({
-    model: "gemini-2.5-flash",
+test("saving encrypts the key, invalidates, and honours the three states", async () => {
+  const base = {
+    provider: "openai" as const,
+    baseUrl: "https://openrouter.ai/api/v1",
+    model: "google/gemini-2.5-flash",
     temperature: 1.1,
     persona: "p",
     placeCheck: true,
     paused: false,
-  });
+  };
+
+  received = [];
+  assert.equal(await settings.saveSettings(base, "sk-plaintext"), true);
+  const written = received.at(-1)?.body ?? "";
+  assert.equal(written.includes("sk-plaintext"), false, "key must be encrypted");
+  assert.match(written, /api_key_cipher/);
+
+  // Saving invalidates the cache, so the next read goes back out.
   received = [];
   await settings.getSettings();
   assert.equal(received.length, 1);
+
+  // Omitted key: the column must not appear at all, or an unrelated edit
+  // would silently wipe the stored key.
+  received = [];
+  await settings.saveSettings(base);
+  assert.equal(received.at(-1)?.body.includes("api_key_cipher"), false);
+
+  // Explicit null clears it.
+  received = [];
+  await settings.saveSettings(base, null);
+  assert.match(received.at(-1)?.body ?? "", /"api_key_cipher":null/);
 });

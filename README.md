@@ -25,7 +25,8 @@ admin panel stays locked. Copy `.env.example` and fill in what you have.
 | Missing | What happens |
 |---|---|
 | `UPSTASH_REDIS_*` | in-memory room store, no rate limiting (dev only) |
-| `GEMINI_API_KEY` | canned verdict; the flow still demonstrates |
+| all LLM keys | canned fallback verdict; the flow still demonstrates |
+| `SETTINGS_ENCRYPTION_KEY` | the admin can't store an endpoint key; env only |
 | `GOOGLE_PLACES_API_KEY` | no existence check; the Maps search link still works |
 | `SUPABASE_*` | default settings, no history recorded |
 | `ADMIN_PASSWORD` | `/admin` refuses to open at all |
@@ -42,9 +43,27 @@ two seconds; that is a KV workload, and it stays in Redis.
 ## Admin
 
 `/admin` — case history, abandonment and protest rates, judge failures, latency.
-`/admin/pengaturan` — persona (system prompt), model, temperature, place check, and a
-pause switch. Changes apply within 30 seconds.
+`/admin/pengaturan` — provider, model, temperature, persona (system prompt), place
+check, and a pause switch. Changes apply within 30 seconds.
 
-API keys are **not** editable there, on purpose. The Places field mask is hardcoded to
-`places.id`: it is the only mask that stays on the free Text Search Essentials tier.
-Any name-bearing field silently promotes every call to Pro at $32 per 1,000.
+### Custom endpoints
+
+The judge speaks two dialects: Gemini's native API, or **any OpenAI-compatible
+`/chat/completions`** — OpenAI, OpenRouter, Groq, DeepSeek, vLLM, Ollama, LM Studio,
+or your own gateway. Pick "Endpoint sendiri" in the admin panel, paste a base URL
+(with or without the `/chat/completions` suffix), and hit **Uji koneksi** before
+saving; it runs one real verdict and tells you what to fix if it fails.
+
+Structured output degrades on its own rather than exposing a knob: `json_schema`
+first, then `json_object`, then plain text. Small local models usually land on the
+second, and the parser still digs JSON out of a ```` ```json ```` fence.
+
+A custom endpoint's key can be saved from the panel, encrypted with AES-GCM under
+`SETTINGS_ENCRYPTION_KEY` — the master key stays in env, so a database snapshot alone
+doesn't read it, and the value is never sent back to the browser. Without that env
+var the field is disabled and the key must come from `LLM_API_KEY`; nothing is ever
+stored in the clear. The Gemini key is env-only either way.
+
+The Places field mask is hardcoded to `places.id`: it is the only mask that stays on
+the free Text Search Essentials tier. Any name-bearing field silently promotes every
+call to Pro at $32 per 1,000.

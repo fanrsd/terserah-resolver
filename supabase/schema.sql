@@ -6,13 +6,24 @@
 
 create table if not exists public.settings (
   id          boolean primary key default true constraint settings_singleton check (id),
+  provider    text    not null default 'gemini' check (provider in ('gemini', 'openai')),
+  -- Base URL of any OpenAI-compatible /chat/completions endpoint.
+  base_url    text    not null default '',
   model       text    not null default 'gemini-2.5-flash',
   temperature real    not null default 1.1 check (temperature >= 0 and temperature <= 2),
   persona     text    not null default '',
   place_check boolean not null default true,
   paused      boolean not null default false,
+  -- AES-GCM blob, base64(iv || ciphertext). Master key lives in
+  -- SETTINGS_ENCRYPTION_KEY, never here. Null means "fall back to env".
+  api_key_cipher text,
   updated_at  timestamptz not null default now()
 );
+
+-- Existing installs: create table if not exists skips the columns above.
+alter table public.settings add column if not exists provider text not null default 'gemini';
+alter table public.settings add column if not exists base_url text not null default '';
+alter table public.settings add column if not exists api_key_cipher text;
 
 insert into public.settings (id) values (true) on conflict (id) do nothing;
 
