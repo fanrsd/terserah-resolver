@@ -60,8 +60,11 @@ export async function POST(request: Request) {
 function explain(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
 
-  if (error instanceof Error && error.name === "TimeoutError") {
-    return "Endpoint tidak menjawab dalam 12 detik. Model terlalu besar, atau URL menggantung.";
+  if (
+    (error instanceof Error && error.name === "TimeoutError") ||
+    /timed out|aborted/i.test(message)
+  ) {
+    return "Endpoint tidak menjawab dalam 75 detik — batas keras dari Cloudflare, bukan pilihan. Model yang berpikir panjang bisa selewat itu; pakai model yang lebih cepat, atau matikan mode reasoning-nya.";
   }
   if (/fetch failed|ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(message)) {
     return `Tidak bisa menghubungi endpoint (${message}). Cek base URL, port, dan apakah servernya jalan.`;

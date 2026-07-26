@@ -4,7 +4,28 @@ import { completionsUrl, type Settings } from "./settings-schema.ts";
 
 // Env is read inside functions, never at module scope: on Cloudflare Workers
 // `process.env` is populated per request.
-const TIMEOUT_MS = 12_000;
+
+/**
+ * Total wall-clock the judge may spend, across every attempt.
+ *
+ * Cloudflare closes a request that produces nothing for ~100s with a 524, so
+ * this is a platform ceiling rather than a preference — which is why it is a
+ * constant and not an admin setting: the knob could only ever go down.
+ *
+ * It used to be a flat 12s per call, picked when the only provider was Gemini
+ * Flash (1-3s). A reasoning model behind an OpenAI-compatible endpoint can
+ * legitimately think for 30-60s, so every call aborted and every verdict fell
+ * back. Budgeting the whole judge instead of each fetch means a slow model gets
+ * its one honest attempt, and the fallback still lands before Cloudflare gives up.
+ */
+const JUDGE_BUDGET_MS = 75_000;
+
+/** Below this there is no point starting another call. */
+const MIN_ATTEMPT_MS = 6_000;
+
+function remaining(deadline: number): number {
+  return deadline - Date.now();
+}
 
 const FIELDS = {
   place: { type: "string", description: "Nama tempat makan, HURUF KAPITAL SEMUA" },
@@ -50,6 +71,7 @@ async function callGemini(
   room: Room,
   settings: Settings,
   key: string,
+  deadline: number,
   avoid?: string,
 ): Promise<string> {
   const response = await fetch(
@@ -81,7 +103,7 @@ async function callGemini(
           temperature: settings.temperature,
         },
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(remaining(deadline)),
     },
   );
 
@@ -111,11 +133,16 @@ const JSON_SCHEMA_FORMAT = {
  * Structured output support is uneven across those, so this degrades on its own
  * rather than exposing a knob: json_schema first, then json_object, then plain
  * text. `parseVerdict` is the backstop for whatever comes back.
+ *
+ * Degradation only fires on 400/422 — "this server doesn't know that format".
+ * A timeout is not that, and retrying a reasoning model in a slower mode would
+ * spend the entire budget confirming it is slow, so it propagates immediately.
  */
 async function callOpenAI(
   room: Room,
   settings: Settings,
   key: string,
+  deadline: number,
   avoid?: string,
 ): Promise<string> {
   const url = completionsUrl(settings.baseUrl);
@@ -123,6 +150,8 @@ async function callOpenAI(
   let lastStatus = 0;
 
   for (const responseFormat of formats) {
+    if (remaining(deadline) < MIN_ATTEMPT_MS) break;
+
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -138,7 +167,7 @@ async function callOpenAI(
         ],
         ...(responseFormat ? { response_format: responseFormat } : {}),
       }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(remaining(deadline)),
     });
 
     if (response.ok) {
@@ -147,8 +176,6 @@ async function callOpenAI(
     }
 
     lastStatus = response.status;
-    // 400/422 here almost always means "this server doesn't know that
-    // response_format". Anything else is a real error worth surfacing now.
     if (lastStatus !== 400 && lastStatus !== 422) break;
   }
 
@@ -228,28 +255,34 @@ export async function callProvider(
   settings: Settings,
   key: string,
   avoid?: string,
+  deadline = Date.now() + JUDGE_BUDGET_MS,
 ): Promise<Verdict> {
   const raw =
     settings.provider === "openai"
-      ? await callOpenAI(room, settings, key, avoid)
-      : await callGemini(room, settings, key, avoid);
+      ? await callOpenAI(room, settings, key, deadline, avoid)
+      : await callGemini(room, settings, key, deadline, avoid);
   return parseVerdict(raw);
 }
 
 /**
  * Always resolves. A broken judge hands the decision back to A rather than
  * showing an error, because this screen is the entire growth loop.
+ *
+ * Every attempt draws from one shared deadline, so a slow model gets a real
+ * chance instead of two truncated ones, and the fallback still returns before
+ * Cloudflare times the request out.
  */
 export async function judge(room: Room): Promise<Verdict> {
+  const deadline = Date.now() + JUDGE_BUDGET_MS;
   const [settings, key] = await Promise.all([getSettings(), getProviderKey()]);
   const surrendered = !room.bDealbreakers?.length;
   const checking =
     settings.placeCheck && Boolean(process.env.GOOGLE_PLACES_API_KEY);
 
   if (key) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    while (remaining(deadline) >= MIN_ATTEMPT_MS) {
       try {
-        const verdict = await callProvider(room, settings, key);
+        const verdict = await callProvider(room, settings, key, undefined, deadline);
 
         // B surrendered: A's pick stands, whatever the model felt like writing.
         if (surrendered) {
@@ -262,10 +295,17 @@ export async function judge(room: Room): Promise<Verdict> {
           return { ...verdict, placeVerified: true };
         }
 
-        const second = await callProvider(room, settings, key, verdict.place);
+        // Only re-ask if there is time; otherwise keep the unverified pick,
+        // which is still a real verdict and beats the fallback.
+        if (remaining(deadline) < MIN_ATTEMPT_MS) {
+          return { ...verdict, placeVerified: false };
+        }
+        const second = await callProvider(
+          room, settings, key, verdict.place, deadline,
+        );
         return { ...second, placeVerified: await placeExists(second.mapsQuery) };
       } catch {
-        // fall through to the next attempt, then to the fallback below
+        // out of budget, or the endpoint failed; loop decides whether to retry
       }
     }
   }
