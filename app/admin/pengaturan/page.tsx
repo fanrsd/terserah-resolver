@@ -36,6 +36,7 @@ export default async function AdminPengaturan() {
         disabled={!hasSupabase()}
         keyStored={keyStored}
         canStoreSecrets={canStoreSecrets()}
+        placesKeySet={Boolean(process.env.GOOGLE_PLACES_API_KEY)}
       />
 
       <section className="mt-14 border-t border-ink-line pt-6">

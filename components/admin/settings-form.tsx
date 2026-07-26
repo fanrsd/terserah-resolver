@@ -24,11 +24,13 @@ export function SettingsForm({
   disabled,
   keyStored,
   canStoreSecrets,
+  placesKeySet,
 }: {
   initial: Settings;
   disabled: boolean;
   keyStored: boolean;
   canStoreSecrets: boolean;
+  placesKeySet: boolean;
 }) {
   const [form, setForm] = useState(initial);
   // undefined = leave the stored key alone, "" via Hapus = clear it.
@@ -299,10 +301,15 @@ export function SettingsForm({
         <div className="grid gap-4">
           <Toggle
             id="placeCheck"
-            checked={form.placeCheck}
+            checked={placesKeySet && form.placeCheck}
+            disabled={!placesKeySet}
             onChange={(placeCheck) => patch({ placeCheck })}
             label="Verifikasi tempat lewat Places"
-            hint="Text Search dengan field mask places.id saja: gratis tanpa batas. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali."
+            hint={
+              placesKeySet
+                ? "Text Search dengan field mask places.id saja: gratis tanpa batas. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali."
+                : "GOOGLE_PLACES_API_KEY belum diset, jadi saklar ini mati apa pun isinya: nama tempat dipercaya mentah-mentah dari model, tidak pernah dicek ada atau tidak. Set secret-nya lalu deploy ulang — verifikasinya gratis tanpa batas."
+            }
           />
           <Toggle
             id="paused"
@@ -411,6 +418,7 @@ function Toggle({
   onChange,
   label,
   hint,
+  disabled,
   danger,
 }: {
   id: string;
@@ -418,6 +426,7 @@ function Toggle({
   onChange: (value: boolean) => void;
   label: string;
   hint: string;
+  disabled?: boolean;
   danger?: boolean;
 }) {
   return (
@@ -426,6 +435,7 @@ function Toggle({
         id={id}
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         aria-describedby={`${id}-hint`}
         onChange={(event) => onChange(event.target.checked)}
         className="mt-1 size-5 accent-[var(--color-stamp)]"
