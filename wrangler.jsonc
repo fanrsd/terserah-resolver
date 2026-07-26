@@ -37,5 +37,4 @@
   //   npx wrangler secret put SETTINGS_ENCRYPTION_KEY
   //   npx wrangler secret put GEMINI_API_KEY           (optional)
   //   npx wrangler secret put LLM_API_KEY              (optional)
-  //   npx wrangler secret put GOOGLE_PLACES_API_KEY    (optional)
 }

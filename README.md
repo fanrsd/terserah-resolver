@@ -30,7 +30,7 @@ and the admin panel stays locked. Copy `.env.example` and fill in what you have.
 |---|---|
 | all LLM keys | canned fallback verdict; the flow still demonstrates |
 | `SETTINGS_ENCRYPTION_KEY` | the admin can't store an endpoint key; env only |
-| `GOOGLE_PLACES_API_KEY` | no existence check; the Maps search link still works |
+| `places` table empty | no existence check; the Maps search link still works |
 | `SUPABASE_*` | **nothing works** — rooms, history and settings all live there |
 | `ADMIN_PASSWORD` | `/admin` refuses to open at all |
 
@@ -89,8 +89,7 @@ npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SETTINGS_ENCRYPTION_KEY
-# then whichever of GEMINI_API_KEY / LLM_API_KEY /
-# GOOGLE_PLACES_API_KEY you use
+# then whichever of GEMINI_API_KEY / LLM_API_KEY you use
 ```
 
 Three things the Workers runtime forced, all of them worth knowing before editing:

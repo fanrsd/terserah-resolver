@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { AdminShell, SetupNotice } from "@/components/admin/shell";
+import { placeIndexSize } from "@/lib/judge";
 import { canStoreSecrets } from "@/lib/secret";
 import { getSettings, hasStoredKey } from "@/lib/settings";
 import { hasSupabase } from "@/lib/supabase";
@@ -12,9 +13,10 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPengaturan() {
-  const [settings, keyStored] = await Promise.all([
+  const [settings, keyStored, placeIndex] = await Promise.all([
     getSettings(),
     hasStoredKey(),
+    placeIndexSize(),
   ]);
 
   return (
@@ -36,7 +38,7 @@ export default async function AdminPengaturan() {
         disabled={!hasSupabase()}
         keyStored={keyStored}
         canStoreSecrets={canStoreSecrets()}
-        placesKeySet={Boolean(process.env.GOOGLE_PLACES_API_KEY)}
+        placeIndex={placeIndex}
       />
 
       <section className="mt-14 border-t border-ink-line pt-6">
@@ -56,9 +58,10 @@ export default async function AdminPengaturan() {
             situlah gunanya: ganti penyedia tanpa deploy ulang.
           </li>
           <li>
-            <span className="text-bone">Field mask Places.</span> Dikunci ke{" "}
-            <code>places.id</code> selamanya. Field apa pun yang mengembalikan
-            nama menaikkan tagihan dari gratis ke $32/1.000.
+            <span className="text-bone">Indeks tempat itu lokal.</span> Bukan
+            panggilan ke Google — 1 juta nama tempat makan se-Indonesia dari
+            Foursquare Open Source Places, tersimpan di Postgres yang sama.
+            Tidak ada key, tidak ada kuota, tidak ada tagihan.
           </li>
           <li>
             <span className="text-bone">Rate limit.</span> 5 perkara/jam/IP,

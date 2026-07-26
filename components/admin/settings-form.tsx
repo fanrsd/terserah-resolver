@@ -24,13 +24,13 @@ export function SettingsForm({
   disabled,
   keyStored,
   canStoreSecrets,
-  placesKeySet,
+  placeIndex,
 }: {
   initial: Settings;
   disabled: boolean;
   keyStored: boolean;
   canStoreSecrets: boolean;
-  placesKeySet: boolean;
+  placeIndex: number;
 }) {
   const [form, setForm] = useState(initial);
   // undefined = leave the stored key alone, "" via Hapus = clear it.
@@ -301,14 +301,14 @@ export function SettingsForm({
         <div className="grid gap-4">
           <Toggle
             id="placeCheck"
-            checked={placesKeySet && form.placeCheck}
-            disabled={!placesKeySet}
+            checked={placeIndex > 0 && form.placeCheck}
+            disabled={placeIndex === 0}
             onChange={(placeCheck) => patch({ placeCheck })}
-            label="Verifikasi tempat lewat Places"
+            label="Verifikasi tempat lewat indeks Foursquare"
             hint={
-              placesKeySet
-                ? "Text Search dengan field mask places.id saja: gratis tanpa batas. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali."
-                : "GOOGLE_PLACES_API_KEY belum diset, jadi saklar ini mati apa pun isinya: nama tempat dipercaya mentah-mentah dari model, tidak pernah dicek ada atau tidak. Set secret-nya lalu deploy ulang — verifikasinya gratis tanpa batas."
+              placeIndex > 0
+                ? `${placeIndex.toLocaleString("id-ID")} nama tempat makan se-Indonesia, dicocokkan persis di Postgres. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali.`
+                : "Tabel places kosong, jadi saklar ini mati apa pun isinya: nama tempat dipercaya mentah-mentah dari model. Jalankan supabase/migrations/0003_places.sql, lalu isi dengan scripts/load-places.mjs."
             }
           />
           <Toggle

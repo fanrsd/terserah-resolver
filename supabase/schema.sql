@@ -68,8 +68,18 @@ create table if not exists public.rate_hits (
 create index if not exists rate_hits_lookup_idx
   on public.rate_hits (bucket, ip, at desc);
 
+-- Existence check for the place the judge names. Foursquare Open Source Places
+-- (Apache 2.0), Indonesia only, food venues only, names normalised to
+-- lowercase alphanumerics. Google Places would answer the same question but
+-- needs a billing-enabled Cloud project; this needs neither key nor card.
+-- Built by supabase/migrations/0003_places.sql — see it for the rebuild recipe.
+create table if not exists public.places (
+  nn text primary key
+);
+
 -- Every read and write goes through the service role from the server.
 -- Enabling RLS with no policies denies anon and authenticated outright.
 alter table public.settings  enable row level security;
 alter table public.cases     enable row level security;
 alter table public.rate_hits enable row level security;
+alter table public.places    enable row level security;

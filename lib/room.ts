@@ -13,7 +13,7 @@ export type Verdict = {
   reasoning: string;
   /** True when the judge fell over and we handed the decision back to A. */
   fallback?: boolean;
-  /** Free IDs-only Places check: true/false when run, undefined when skipped. */
+  /** Foursquare index hit: true/false when checked, undefined when not. */
   placeVerified?: boolean;
 };
 

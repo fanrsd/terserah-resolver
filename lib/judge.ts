@@ -1,6 +1,7 @@
 import type { Room, Verdict } from "./room.ts";
 import { getProviderKey, getSettings } from "./settings.ts";
 import { completionsUrl, type Settings } from "./settings-schema.ts";
+import { hasSupabase, supabase } from "./supabase.ts";
 
 // Env is read inside functions, never at module scope: on Cloudflare Workers
 // `process.env` is populated per request.
@@ -214,40 +215,60 @@ export function parseVerdict(text: unknown): Verdict {
 /* ------------------------------------------------------------ place check -- */
 
 /**
- * Confirms the place exists, without ever asking Google to name it.
+ * Normalises a place name to the exact shape stored in `public.places`.
  *
- * The `places.id` field mask keeps this on Text Search Essentials (IDs Only),
- * SKU 635D-A9DD-C520 — the one Essentials SKU Google's pricing table lists as
- * "Unlimited" with no per-1k rate, where its neighbours cap at 10,000/month.
- * Adding any name-bearing field (`displayName`, `formattedAddress`) silently
- * promotes the call to Text Search Pro at $32/1k. Verified 2026-07-26.
+ * Must stay identical to the DuckDB expression that built the index —
+ * `trim(regexp_replace(lower(name), '[^a-z0-9]+', ' ', 'g'))` — because the
+ * lookup is an equality probe on the primary key. Drifting one side of this
+ * pair turns every check into a silent miss.
  */
-async function placeExists(query: string): Promise<boolean> {
-  try {
-    const response = await fetch(
-      "https://places.googleapis.com/v1/places:searchText",
-      {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY as string,
-          "X-Goog-FieldMask": "places.id",
-        },
-        body: JSON.stringify({
-          textQuery: query,
-          maxResultCount: 1,
-          languageCode: "id",
-          regionCode: "ID",
-        }),
-        signal: AbortSignal.timeout(6_000),
-      },
-    );
-    if (!response.ok) return true;
-    const payload = await response.json();
-    return Array.isArray(payload.places) && payload.places.length > 0;
-  } catch {
-    return true; // the check is a nicety; never let it fail a verdict
-  }
+function normalisePlace(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Confirms the judge named a real restaurant, against the Foursquare index in
+ * `public.places` (see supabase/migrations/0003_places.sql).
+ *
+ * Null means the check could not run — no Supabase, or the migration has not
+ * been applied. Deliberately not `true`: the Google version this replaced
+ * returned `true` on every failure, so an unreachable checker was recorded as
+ * a pass. Since its key was never set, that path was the only one that ever
+ * ran, and `place_verified` claimed nothing at all rather than lying either
+ * way only because the outer gate happened to be false too.
+ */
+async function placeExists(name: string): Promise<boolean | null> {
+  const db = supabase();
+  if (!db) return null;
+
+  const { data, error } = await db
+    .from("places")
+    .select("nn")
+    .eq("nn", normalisePlace(name))
+    .maybeSingle();
+
+  return error ? null : data !== null;
+}
+
+/**
+ * How many names the index holds, for the admin toggle.
+ *
+ * Zero means the migration ran but nothing was loaded, or neither happened.
+ * The toggle reads this instead of a key's presence so it can never again
+ * advertise a check that has no way to run.
+ */
+export async function placeIndexSize(): Promise<number> {
+  const db = supabase();
+  if (!db) return 0;
+
+  const { count, error } = await db
+    .from("places")
+    .select("nn", { count: "exact", head: true });
+
+  return error ? 0 : (count ?? 0);
 }
 
 /* ------------------------------------------------------------------ judge -- */
@@ -278,8 +299,7 @@ export async function judge(room: Room): Promise<Verdict> {
   const deadline = Date.now() + JUDGE_BUDGET_MS;
   const [settings, key] = await Promise.all([getSettings(), getProviderKey()]);
   const surrendered = !room.bDealbreakers?.length;
-  const checking =
-    settings.placeCheck && Boolean(process.env.GOOGLE_PLACES_API_KEY);
+  const checking = settings.placeCheck && hasSupabase();
 
   if (key) {
     while (remaining(deadline) >= MIN_ATTEMPT_MS) {
@@ -293,8 +313,11 @@ export async function judge(room: Room): Promise<Verdict> {
           return verdict;
         }
         if (!checking) return verdict;
-        if (await placeExists(verdict.mapsQuery)) {
-          return { ...verdict, placeVerified: true };
+        // `null` is "could not check", not "passed" — leave placeVerified
+        // unset so the admin history shows an absent check as absent.
+        const verified = await placeExists(verdict.place);
+        if (verified !== false) {
+          return verified ? { ...verdict, placeVerified: true } : verdict;
         }
 
         // Only re-ask if there is time; otherwise keep the unverified pick,
@@ -305,7 +328,10 @@ export async function judge(room: Room): Promise<Verdict> {
         const second = await callProvider(
           room, settings, key, verdict.place, deadline,
         );
-        return { ...second, placeVerified: await placeExists(second.mapsQuery) };
+        return {
+          ...second,
+          placeVerified: (await placeExists(second.place)) ?? undefined,
+        };
       } catch {
         // out of budget, or the endpoint failed; loop decides whether to retry
       }

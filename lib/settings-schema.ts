@@ -29,7 +29,7 @@ export type Settings = {
   temperature: number;
   /** The system prompt. The single highest-leverage knob in the product. */
   persona: string;
-  /** Free IDs-only Places existence check. Off = trust the model outright. */
+  /** Local Foursquare existence check. Off = trust the model outright. */
   placeCheck: boolean;
   /** Kill switch: stops new cases without a redeploy. */
   paused: boolean;
