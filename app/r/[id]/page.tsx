@@ -67,6 +67,18 @@ export default async function RoomPage({ params }: Props) {
           >
             Ajukan perkara baru
           </Link>
+          <p className="mt-4 text-xs font-normal text-muted">
+            Puas sama putusannya?{" "}
+            <a
+              href="https://saweria.co/diabilangterserah"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-stamp-lift underline underline-offset-4 transition-colors duration-150 hover:text-bone"
+            >
+              Traktir hakimnya
+            </a>
+            .
+          </p>
         </>
       ) : isPlaintiff ? (
         <>

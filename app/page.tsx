@@ -63,9 +63,23 @@ export default function Home() {
         </ol>
       </section>
 
-      <footer className="mt-16 border-t border-ink-line pt-5 text-xs font-normal text-muted">
-        Putusan dibuat oleh mesin dan tidak mengikat secara hukum. Perkara
-        dihapus otomatis setelah 24 jam.
+      <footer className="mt-16 grid gap-3 border-t border-ink-line pt-5 text-xs font-normal text-muted">
+        <p>
+          Putusan dibuat oleh mesin dan tidak mengikat secara hukum. Perkara
+          dihapus otomatis setelah 24 jam.
+        </p>
+        <p>
+          Sidang ini gratis dan tanpa iklan.{" "}
+          <a
+            href="https://saweria.co/diabilangterserah"
+            target="_blank"
+            rel="noreferrer noopener"
+            className="text-stamp-lift underline underline-offset-4 transition-colors duration-150 hover:text-bone"
+          >
+            Traktir hakimnya
+          </a>
+          .
+        </p>
       </footer>
     </main>
   );
