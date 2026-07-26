@@ -37,9 +37,17 @@ and the admin panel stays locked. Copy `.env.example` and fill in what you have.
 ## Supabase
 
 Run [`supabase/schema.sql`](supabase/schema.sql) once in the SQL editor. It creates
-`settings` (singleton), `cases` (rooms + history), and `rate_hits`, and enables RLS
-with no policies — every access goes through the service role from the server, so
-anon is denied outright, verified against all four verbs.
+`settings` (singleton), `cases` (rooms + history), `rate_hits`, and `places`, and
+enables RLS with no policies — every access goes through the service role from the
+server, so anon is denied outright, verified against all four verbs.
+
+`places` starts empty and stays useless until it is filled: it is the existence
+check for the restaurant the judge names, 1,084,930 food-venue names from
+Foursquare Open Source Places. Google Places answers the same question but wants
+a billing-enabled Cloud project; this wants neither key nor card. Load it with
+`node --env-file=.env.local scripts/load-places.mjs places.txt` — see
+[`supabase/migrations/0003_places.sql`](supabase/migrations/0003_places.sql) for
+where `places.txt` comes from and what the index cannot do.
 
 Rooms live here too. They were briefly in Redis — a KV workload on paper — but
 Cloudflare Workers has no shared process memory, so a room existed only inside the
