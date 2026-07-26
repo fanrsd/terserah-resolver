@@ -66,21 +66,64 @@ market and alienates the recipient.
 
 ## 2. Where the restaurant data comes from
 
-This was the open technical question in the source, and the answer for MVP is the
-cheap one plus one guard.
+This was the open technical question in the source. The referenced article
+([Nannapuneni, 2022](https://medium.com/@nagasameer/building-a-restaurant-picker-program-using-google-places-api-99aa3108310))
+solves the adjacent problem — pull nearby restaurants, filter by keyword/price/radius,
+pick one — with legacy Nearby Search from a Python CLI. The retrieval shape is right.
+The API and the economics are not, and the difference decides the architecture.
 
-**Approach:** LLM internal knowledge, enriched with the city A enters. Large
-franchises and well-known local spots in Indonesian cities are well represented in
-model training data; hallucination risk concentrates on small independent places.
+### What Places actually costs (verified 2026-07-20 SKU tables)
 
-**The guard:** the model also returns a `maps_query` string. The result card renders
-a `Buka di Maps` button pointing at
-`https://www.google.com/maps/search/?api=1&query=<encoded>`. If the model invents a
-name, the Maps search still lands the user on something plausible in their city. Zero
-API cost, zero keys, and it kills the worst failure mode.
+The `$200` monthly credit is dead; billing is now per-SKU free caps, and the field
+mask you send determines which SKU you are billed at — highest tier wins.
 
-Google Places API is deliberately **not** in the MVP. Add it when hallucination is
-observed in real use, not before. It is a swap behind one function.
+| Call | SKU | Free/mo | Then |
+|---|---|---|---|
+| Nearby Search, any fields (the article's approach) | Nearby Search Pro | 5,000 | **$32.00 / 1k** |
+| Text Search asking for `displayName` | Text Search Pro | 5,000 | **$32.00 / 1k** |
+| Text Search asking for `places.id` only | Text Search Essentials (IDs Only) | **Unlimited** | **free** |
+| Place Details for `formattedAddress`, `location`, `types` | Place Details Essentials | 10,000 | $5.00 / 1k |
+
+Nearby Search has no Essentials tier at all — every field on it, including the name,
+bills at Pro. That is the trap in porting the article directly: one viral weekend at
+50k rooms costs ~$1,440.
+
+Note `displayName` is a **Pro** field. There is no cheap way to ask Google *"what is
+this place called?"* — which is exactly why the LLM should keep that job.
+
+### The design: Google validates, the LLM decides
+
+Inverting the source's Approach 2 (where the LLM extracts a query and Google
+retrieves) makes the whole thing free:
+
+1. The LLM proposes a place from internal knowledge, enriched with A's city. Large
+   franchises and well-known spots in Indonesian cities are well represented in
+   training data; hallucination concentrates on small independents.
+2. **Existence check.** Text Search with `textQuery: "<place>, <city>"` and field mask
+   `places.id` — nothing else. Text Search Essentials (IDs Only): unlimited, free,
+   forever. One result back means the place is real.
+3. Zero results means the model invented it. Retry the LLM once, told the previous
+   pick does not exist. Second miss falls through to the `maps_query` link below.
+
+Google never has to name anything, so the bill never leaves the free tier no matter
+how viral it gets. The LLM keeps the reasoning and the roast, which is the part that
+is actually the product.
+
+### The floor, if the key is missing or the check fails
+
+The model also returns a `maps_query` string, and the card's `Buka di Maps` button
+points at `https://www.google.com/maps/search/?api=1&query=<encoded>`. No key, no
+quota, no SKU. Even an invented name lands the user on a real search in their city.
+Ship this first; the existence check layers on top without changing the card.
+
+### Deferred, with a trigger
+
+One **Place Details Essentials** call (`formattedAddress`, `location`) to print a real
+address and an exact pin instead of a search. 10,000 free/mo, then $5/1k. Add it when
+users complain the Maps link is imprecise — not before.
+
+`displayName`, `rating`, `priceLevel`, and opening hours are Pro/Enterprise fields.
+The judge does not need them, and asking would move every call into the $32/1k band.
 
 ---
 
@@ -97,10 +140,11 @@ observed in real use, not before. It is a swap behind one function.
 | LLM | Gemini 2.5 Flash via raw `fetch` | structured output via `responseSchema` in the request body is ~20 lines; an SDK adds a dependency for nothing. Model name is one env var |
 | Rate limit | `@upstash/ratelimit` | same Redis, public unauthenticated LLM endpoint spends real money |
 | OG image | `next/og` `ImageResponse` | the WhatsApp preview *is* the growth surface |
+| Place check | Places API Text Search, `places.id` field mask only | Nearby Search and any name-bearing field mask bill at Pro, $32/1k after 5k. IDs-only Text Search is unlimited and free — see §2. Optional: the app works without the key |
 | Host | Vercel | — |
 
 Skipped: Supabase + realtime subscriptions, an LLM SDK, a server-rendered PNG
-download pipeline, accounts, an ORM.
+download pipeline, accounts, an ORM, and any Places call that returns a name.
 
 ### Data model
 
@@ -227,6 +271,9 @@ chat on top, the app issuing its verdict below.
 - Manual smoke: create a room in one browser, open the link in a second profile,
   run both the accept and the protest branch, confirm A's screen flips without a
   reload and that the OG preview renders in a real WhatsApp message.
+- If the Places key is configured: assert the existence check passes for a real
+  Jakarta franchise and fails for an invented name, and that a missing key degrades
+  to the `maps_query` link rather than erroring.
 - Every heading checked at 320px — Anton at a large clamp overflows fast.
 
 ---
@@ -235,7 +282,9 @@ chat on top, the app issuing its verdict below.
 
 | Skipped | Add when |
 |---|---|
-| Google Places API | hallucinated places show up in real sessions |
+| Places existence check (free, IDs-only) | hallucinated places show up in real sessions — it is one fetch behind a flag |
+| Place Details Essentials for exact address/pin | users complain the Maps search link is imprecise |
+| Any Pro-tier Places field (`displayName`, rating, hours, price) | never — $32/1k, and the judge does not use them |
 | Categories beyond food | the food loop retains |
 | Accounts, history, streaks | someone asks twice |
 | Monetization | the loop is proven; then gate unlimited rooms or custom judge personas |

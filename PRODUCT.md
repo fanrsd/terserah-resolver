@@ -68,3 +68,6 @@ history, streaks, payments, 3+ party rooms, English.
 - Zero-auth. A room is a random slug with a 24h TTL.
 - The AI must never produce a blank or broken screen. Every path terminates in a card.
 - LLM cost is real and the endpoint is public — rate limiting is not optional.
+- Marginal cost per room must stay near zero under a viral spike. The LLM call is the
+  only paid unit; place lookup is restricted to the free IDs-only Places SKU and must
+  never ask for a name-bearing field. See §2 of the design doc.
