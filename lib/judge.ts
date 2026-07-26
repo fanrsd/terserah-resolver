@@ -216,9 +216,11 @@ export function parseVerdict(text: unknown): Verdict {
 /**
  * Confirms the place exists, without ever asking Google to name it.
  *
- * The `places.id` field mask keeps this on Text Search Essentials (IDs Only):
- * unlimited and free. Adding any name-bearing field (`displayName`,
- * `formattedAddress`) silently promotes the call to Pro at $32/1k.
+ * The `places.id` field mask keeps this on Text Search Essentials (IDs Only),
+ * SKU 635D-A9DD-C520 — the one Essentials SKU Google's pricing table lists as
+ * "Unlimited" with no per-1k rate, where its neighbours cap at 10,000/month.
+ * Adding any name-bearing field (`displayName`, `formattedAddress`) silently
+ * promotes the call to Text Search Pro at $32/1k. Verified 2026-07-26.
  */
 async function placeExists(query: string): Promise<boolean> {
   try {
