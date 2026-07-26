@@ -41,9 +41,17 @@
 -- distinct names have no FSQ category but are plainly warungs, and dropping
 -- them would repeat Nominatim's mistake of rejecting real places.
 --
--- Names only. The question is existence, and `cases.verdict_place` already
--- records what was asked. `nn` as the primary key makes the lookup one index
--- probe and the loader idempotent.
+-- Names only, and nationwide — this is weaker than the Google call it replaces,
+-- which passed "name, city" and was therefore city-scoped. FSQ's `locality` is
+-- too dirty to scope with: mostly null, and the populated values run from
+-- "Jakarta" to "Kuningan- JakSel" to a `region` of "Indonesia". So a Jakarta
+-- verdict passes if the name exists anywhere in the country: "Ayam Bakar Bu
+-- Tini" is real, but it is in Samarinda. That trade is deliberate. The check
+-- exists to catch invented names, and scoping it on this data would reject far
+-- more real places than the cross-city passes it prevents.
+--
+-- `cases.verdict_place` already records what was asked, and `nn` as the primary
+-- key makes the lookup one index probe and the loader idempotent.
 
 create table if not exists public.places (
   nn text primary key

@@ -10,3 +10,7 @@ supabase/.temp/
 .wrangler/
 .dev.vars
 cloudflare-env.d.ts
+
+# Generated place index, ~24 MB. Rebuild recipe lives in
+# supabase/migrations/0003_places.sql; the rows belong in Postgres, not here.
+places.txt

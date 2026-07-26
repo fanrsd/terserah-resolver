@@ -307,7 +307,7 @@ export function SettingsForm({
             label="Verifikasi tempat lewat indeks Foursquare"
             hint={
               placeIndex > 0
-                ? `${placeIndex.toLocaleString("id-ID")} nama tempat makan se-Indonesia, dicocokkan persis di Postgres. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali.`
+                ? `${placeIndex.toLocaleString("id-ID")} nama tempat makan se-Indonesia, dicocokkan persis di Postgres. Tidak ter-scope kota: nama yang ada di Samarinda lolos untuk perkara Jakarta. Kalau tempat karangan lolos, hakim disuruh memilih ulang sekali.`
                 : "Tabel places kosong, jadi saklar ini mati apa pun isinya: nama tempat dipercaya mentah-mentah dari model. Jalankan supabase/migrations/0003_places.sql, lalu isi dengan scripts/load-places.mjs."
             }
           />
