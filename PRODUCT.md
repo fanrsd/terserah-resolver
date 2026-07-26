@@ -57,11 +57,17 @@ readable and dismissible in three seconds.
 
 ## Scope
 
-**In:** one category — food. Two-party rooms. No accounts. Indonesian only.
+**In:** one category — food. Two-party rooms. No end-user accounts. Indonesian only.
+
+**Also in — admin only,** a single operator behind one password: case history with
+the abandonment/protest/failure metrics named above, and runtime tuning of the judge
+(persona, model, temperature, place check) plus a pause switch. This exists because
+success criterion 2 is unmeasurable otherwise and criterion 3 is a prompt-iteration
+problem.
 
 **Out (and why):** other decision categories (nonton apa, ke mana) — the
-restaurant-knowledge problem is only solved for food; add when food works. Accounts,
-history, streaks, payments, 3+ party rooms, English.
+restaurant-knowledge problem is only solved for food; add when food works. End-user
+accounts, streaks, payments, 3+ party rooms, English.
 
 ## Constraints
 

@@ -135,16 +135,18 @@ The judge does not need them, and asking would move every call into the $32/1k b
 |---|---|---|
 | Framework | Next.js 15 App Router, TypeScript | SSR needed for OG meta tags on the shared link |
 | Styling | Tailwind v4 | tokens in CSS, no config file needed |
-| Store | Upstash Redis | rooms are ephemeral JSON with a TTL — a KV workload, not relational. Supabase would mean schema, migrations, and a cleanup job for a payload that expires in 24h |
+| Rooms | Upstash Redis | rooms are ephemeral JSON with a TTL, polled every 2s — a KV workload. Putting them in Postgres would mean a schema, migrations, and a cleanup job for a payload that deletes itself in 24h |
+| Settings + history | Supabase Postgres | the two things that must outlive a room. Relational, queryable, durable — the opposite of the rooms workload, which is why both stores earn their place |
 | Realtime | client polling, 2s | Upstash has no subscriptions; SSE needs a route handler that polls Redis anyway, so it is strictly more code for a screen that waits ~60s |
-| LLM | Gemini 2.5 Flash via raw `fetch` | structured output via `responseSchema` in the request body is ~20 lines; an SDK adds a dependency for nothing. Model name is one env var |
+| LLM | Gemini via raw `fetch` | structured output via `responseSchema` in the request body is ~20 lines; an SDK adds a dependency for nothing. Model and temperature are admin-tunable, not env-baked |
 | Rate limit | `@upstash/ratelimit` | same Redis, public unauthenticated LLM endpoint spends real money |
 | OG image | `next/og` `ImageResponse` | the WhatsApp preview *is* the growth surface |
 | Place check | Places API Text Search, `places.id` field mask only | Nearby Search and any name-bearing field mask bill at Pro, $32/1k after 5k. IDs-only Text Search is unlimited and free — see §2. Optional: the app works without the key |
+| Admin auth | `ADMIN_PASSWORD` + HMAC-signed cookie | one admin. Supabase Auth would add a provider, a user table, and email config to gate a single person. Web Crypto so the same module runs in edge middleware |
 | Host | Vercel | — |
 
-Skipped: Supabase + realtime subscriptions, an LLM SDK, a server-rendered PNG
-download pipeline, accounts, an ORM, and any Places call that returns a name.
+Skipped: realtime subscriptions, an LLM SDK, a server-rendered PNG download pipeline,
+end-user accounts, an ORM, Supabase Auth, and any Places call that returns a name.
 
 ### Data model
 
@@ -189,9 +191,16 @@ the existing verdict rather than burning another LLM call.
 | `GET /api/room/[id]` | poll target for A's waiting screen |
 | `POST /api/room/[id]/respond` | accept or protest; triggers the LLM on protest |
 | `GET /api/og/[id]` | OG image, doubles as the "Simpan gambar" target |
+| `/admin/login` | password gate; the only path the middleware lets through |
+| `/admin` | riwayat: stats strip + filterable, paginated case table |
+| `/admin/pengaturan` | tunable model, temperature, persona, place check, kill switch |
+| `POST /api/admin/{login,logout,settings}` | rate limited 10/15min on login |
 
-Viewer identity: A gets a `terserah_a=<roomId>` cookie on create. No cookie for that
-room means you are B. No accounts, no fingerprinting.
+`middleware.ts` gates `/admin/*` and `/api/admin/*` in one place, so no page
+re-checks and there is exactly one thing to get wrong.
+
+Viewer identity: A gets a path-scoped `ta_<roomId>` cookie on create. No cookie for
+that room means you are B. No accounts, no fingerprinting.
 
 ### AI contract
 
@@ -249,7 +258,56 @@ submit and the verdict — mono lines reading out like a court (`MENIMBANG…` �
 
 ---
 
-## 5. Growth loop
+## 5. Admin
+
+One operator, three jobs: watch whether the loop is working, tune the judge, and
+stop the bleeding if it isn't.
+
+### Riwayat
+
+A row is written to `cases` at creation and updated at decision. That ordering is
+the point: rows still sitting at `awaiting_b` are exactly the sessions where B never
+engaged, which PRODUCT.md names as the primary metric to beat. The stats strip reads
+abandonment, protest-vs-surrender split, judge failures, and median verdict latency
+off the last 1,000 cases. Filters: all / decided / abandoned / judge-failed.
+
+History is analytics and never a dependency of the user flow — every write swallows
+its own failure. A broken Supabase must not cost anyone dinner.
+
+### Pengaturan API
+
+Tunable at runtime, cached 30s so the hot path stays off the network:
+
+| Setting | Why it's worth a knob |
+|---|---|
+| `persona` | the system prompt is the product; iterating it is the main job |
+| `model` | Flash vs Pro is a real cost/sharpness trade |
+| `temperature` | below 0.7 the verdicts flatten, above 1.4 the model invents places |
+| `place_check` | cost/latency control on the free existence check |
+| `paused` | kill switch for a viral spike, no redeploy |
+
+A blank persona restores the shipped default rather than saving an empty system
+prompt — the "roast both parties" rule is load-bearing and must not be removable by
+clearing a textarea.
+
+**Deliberately not configurable.** API keys stay in env: a secret in a database the
+app reads is worse than a secret in env, and UI rotation is not a real need for one
+admin. The Places field mask is hardcoded to `places.id` forever — any name-bearing
+field moves every call from free to $32/1k. The rate limit is a deploy decision.
+
+### Auth
+
+`ADMIN_PASSWORD` plus an HMAC-signed cookie carrying its own expiry, verified in
+`middleware.ts` with Web Crypto. Password comparison hashes both sides before a
+constant-time compare, so length never leaks. Unset password means the panel is
+locked shut, not wide open.
+
+Supabase Auth was rejected: a provider, a user table, and email configuration to gate
+one person.
+
+---
+
+## 6. Growth loop
 
 Built into the mechanic, not bolted on. A cannot use the product without sending B a
 link — every session recruits one new user. The WhatsApp preview (`/api/og/[id]`) is
@@ -263,30 +321,47 @@ chat on top, the app issuing its verdict below.
 
 ---
 
-## 6. Verification
+## 7. Verification
 
-- One test file covering the room state machine transitions (including that `decided`
-  is idempotent and does not re-invoke the LLM) and that the verdict parser rejects
-  malformed model output and falls back cleanly.
-- Manual smoke: create a room in one browser, open the link in a second profile,
-  run both the accept and the protest branch, confirm A's screen flips without a
-  reload and that the OG preview renders in a real WhatsApp message.
-- If the Places key is configured: assert the existence check passes for a real
-  Jakarta franchise and fails for an invented name, and that a missing key degrades
-  to the `maps_query` link rather than erroring.
-- Every heading checked at 320px — Anton at a large clamp overflows fast.
+**Automated** (`npm test`, 12 tests, node:test):
+
+- Room state machine: the second responder loses, `decided` is terminal so a retry
+  cannot buy a second model call, ids avoid lookalike characters, input cleaning and
+  the exactly-three-dealbreakers rule.
+- Verdict parser rejects malformed model output rather than letting it reach a screen.
+- Admin auth: wrong password, tampered signature, an expiry extended without
+  re-signing, and a genuinely expired token are all rejected.
+- Settings input validation, including that a blank persona restores the default.
+- Supabase wiring against a stub PostgREST server: the query shape, the blank-persona
+  fallback, the 30s cache, and invalidation on save.
+
+**Exercised in-browser** (Chromium, 320 / 390 / 1280px):
+
+- Both endings: protest → judge → decree, and surrender → brass "tanpa lawan" seal.
+- A's waiting screen flipping to the verdict by poll, without a reload.
+- The judge-unavailable fallback rendering as a real verdict, not an error screen.
+- OG image rendering with vendored fonts and the stamp.
+- Admin gate: unauthenticated page redirects, unauthenticated API returns 401, wrong
+  password reports itself, correct password lands on riwayat.
+- Riwayat table, stats strip, and all four filters against seeded rows; settings save
+  round-tripping to the store; `paused` actually returning 503 to the public form.
+- `prefers-reduced-motion` path, and zero horizontal overflow at 320px.
+- Every color pair measured for contrast, not estimated — three failures found and
+  fixed (`--stamp-deep`, `--seal-deep`, and small red text moved to `--stamp-lift`).
+
+**Not yet verified:** a live Gemini key, a live Places key, and a real Supabase
+project. All three ran against stubs or their documented degradation path.
 
 ---
 
-## 7. Deliberately not built
+## 8. Deliberately not built
 
 | Skipped | Add when |
 |---|---|
-| Places existence check (free, IDs-only) | hallucinated places show up in real sessions — it is one fetch behind a flag |
 | Place Details Essentials for exact address/pin | users complain the Maps search link is imprecise |
 | Any Pro-tier Places field (`displayName`, rating, hours, price) | never — $32/1k, and the judge does not use them |
 | Categories beyond food | the food loop retains |
-| Accounts, history, streaks | someone asks twice |
+| End-user accounts and streaks | someone asks twice; admin history already answers the operator's questions |
 | Monetization | the loop is proven; then gate unlimited rooms or custom judge personas |
 | 3+ party rooms | groups actually try it |
 | English / i18n | the Indonesian market is saturated |

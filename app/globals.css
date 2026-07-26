@@ -1,0 +1,189 @@
+@import "tailwindcss";
+
+@theme {
+  /* Night court. Dark ink ground, one stamp red, one bright object. */
+  --color-ink: oklch(0.17 0.015 25);
+  --color-ink-raised: oklch(0.22 0.018 25);
+  --color-ink-line: oklch(0.32 0.02 25);
+  /* stamp clears only 3:1 on ink, so it is display-size only.
+     These two carry small text: lift on dark, deep on the sheet. */
+  --color-stamp: oklch(0.58 0.21 27);
+  --color-stamp-lift: oklch(0.68 0.18 27);
+  --color-stamp-deep: oklch(0.48 0.19 27);
+  --color-decree: oklch(0.94 0.008 40);
+  --color-decree-ink: oklch(0.2 0.01 40);
+  --color-bone: oklch(0.92 0.006 40);
+  --color-muted: oklch(0.68 0.012 25);
+  /* The stamp is text inside an image, so it needs 4.5:1 on the sheet, not 3:1.
+     --color-seal stays for any future non-text use. */
+  --color-seal: oklch(0.6 0.1 110);
+  --color-seal-deep: oklch(0.46 0.09 110);
+
+  --font-decree: var(--font-anton), "Arial Narrow", sans-serif;
+  --font-typed: var(--font-courier-prime), "Courier New", monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+@layer base {
+  :root {
+    --z-sticky: 10;
+    --z-overlay: 20;
+    --z-toast: 30;
+    color-scheme: dark;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-ink);
+    color: var(--color-bone);
+    font-family: var(--font-typed);
+    /* Light type on dark reads lighter; buy back the weight. */
+    font-weight: 700;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--color-stamp);
+    color: var(--color-decree);
+  }
+
+  ::placeholder {
+    color: var(--color-muted);
+    opacity: 1;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-stamp-lift);
+    outline-offset: 3px;
+  }
+}
+
+@utility display {
+  font-family: var(--font-decree);
+  font-weight: 400;
+  line-height: 0.9;
+  /* Anton is already condensed; tightening further collides the letters. */
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+/* Document chrome. Used only where a real form carries a field label,
+   never as decoration above every section. */
+@utility chrome {
+  font-family: var(--font-typed);
+  font-weight: 700;
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* The one bright object: a sheet of paper lit in a dark room. */
+@utility sheet {
+  background: var(--color-decree);
+  color: var(--color-decree-ink);
+  font-weight: 400;
+  box-shadow:
+    0 1px 0 oklch(1 0 0 / 0.5) inset,
+    0 24px 60px -20px oklch(0 0 0 / 0.8),
+    0 4px 14px -6px oklch(0 0 0 / 0.6);
+}
+
+@keyframes decree-land {
+  from {
+    opacity: 0;
+    transform: scale(1.07) rotate(1.6deg);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes stamp-hit {
+  from {
+    opacity: 0;
+    transform: rotate(-14deg) scale(1.9);
+  }
+  to {
+    opacity: 0.92;
+    transform: rotate(-9deg) scale(1);
+  }
+}
+
+@keyframes line-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-decree {
+  animation: decree-land 520ms var(--ease-out-expo) both;
+}
+
+.animate-stamp {
+  animation: stamp-hit 420ms var(--ease-out-expo) 380ms both;
+}
+
+.animate-line {
+  animation: line-in 320ms var(--ease-out-quart) both;
+}
+
+.caret::after {
+  content: "_";
+  animation: caret 900ms step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-decree,
+  .animate-stamp,
+  .animate-line {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+
+  .animate-stamp {
+    opacity: 0.92;
+  }
+
+  .caret::after {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+  }
+}
