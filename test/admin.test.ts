@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { after, test } from "node:test";
+import { after, before, test } from "node:test";
+import * as auth from "../lib/admin-auth.ts";
+import * as secret from "../lib/secret.ts";
+import * as settings from "../lib/settings.ts";
 import {
   completionsUrl,
   DEFAULT_PERSONA,
@@ -9,17 +12,9 @@ import {
   readApiKey,
 } from "../lib/settings-schema.ts";
 
-/*
- * lib/admin-auth, lib/secret, and lib/supabase all read their config at
- * module-evaluation time, so every env var they need must be set before the
- * first import of any of them — including transitive ones. Hence the stub
- * server starts here at the top rather than in a `before` hook, and the three
- * modules below are imported dynamically. A static import would hoist above
- * these assignments and silently capture the unconfigured defaults.
- */
-
-process.env.ADMIN_PASSWORD = "correct horse battery staple";
-process.env.SETTINGS_ENCRYPTION_KEY = "a-master-key-long-enough";
+// Every module under test reads env inside its functions, not at module scope
+// (a Cloudflare Workers requirement), so plain static imports are enough and
+// the env can be set in a hook.
 
 let received: { method: string; url: string; body: string }[] = [];
 
@@ -50,19 +45,21 @@ const server = createServer((request, response) => {
   });
 });
 
-const listening = Promise.withResolvers<void>();
-server.listen(0, listening.resolve);
-await listening.promise;
+before(async () => {
+  process.env.ADMIN_PASSWORD = "correct horse battery staple";
+  process.env.SETTINGS_ENCRYPTION_KEY = "a-master-key-long-enough";
+
+  const listening = Promise.withResolvers<void>();
+  server.listen(0, listening.resolve);
+  await listening.promise;
+
+  const address = server.address();
+  assert.ok(address && typeof address === "object", "server must have a port");
+  process.env.SUPABASE_URL = `http://127.0.0.1:${address.port}`;
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+});
+
 after(() => server.close());
-
-const address = server.address();
-assert.ok(address && typeof address === "object", "server must have a port");
-process.env.SUPABASE_URL = `http://127.0.0.1:${address.port}`;
-process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
-
-const auth = await import("../lib/admin-auth.ts");
-const secret = await import("../lib/secret.ts");
-const settings = await import("../lib/settings.ts");
 
 /* ------------------------------------------------------------- admin auth -- */
 
@@ -220,7 +217,7 @@ test("api key input is three-state so an edit cannot wipe the key", () => {
 });
 
 test("stored keys round-trip and reject tampering", async () => {
-  assert.equal(secret.canStoreSecrets, true);
+  assert.equal(secret.canStoreSecrets(), true);
 
   const cipher = await secret.encryptSecret("sk-super-secret");
   assert.ok(cipher);

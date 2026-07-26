@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "terserah",
+  "compatibility_date": "2026-07-20",
+  "compatibility_flags": [
+    // Node.js APIs. The app runs on Next's Node runtime, not Edge.
+    "nodejs_compat",
+    // Outbound fetches go to the public internet rather than looping back into
+    // this Worker. The judge calls Gemini and custom endpoints; both are public.
+    "global_fetch_strictly_public"
+  ],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // terserah.help must already exist as a zone on this Cloudflare account.
+  "routes": [
+    { "pattern": "terserah.help", "custom_domain": true },
+    { "pattern": "www.terserah.help", "custom_domain": true }
+  ]
+
+  // No "vars" block for the site URL on purpose: NEXT_PUBLIC_* is inlined at
+  // build time, so setting one here would be inert. The domain lives in
+  // lib/site.ts; .env.local overrides it for local dev.
+  //
+  // Secrets are NOT here either. Set them once with:
+  //   npx wrangler secret put SUPABASE_URL
+  //   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+  //   npx wrangler secret put ADMIN_PASSWORD
+  //   npx wrangler secret put SETTINGS_ENCRYPTION_KEY
+  //   npx wrangler secret put GEMINI_API_KEY           (optional)
+  //   npx wrangler secret put LLM_API_KEY              (optional)
+  //   npx wrangler secret put GOOGLE_PLACES_API_KEY    (optional)
+  //   npx wrangler secret put UPSTASH_REDIS_REST_URL   (optional)
+  //   npx wrangler secret put UPSTASH_REDIS_REST_TOKEN (optional)
+}

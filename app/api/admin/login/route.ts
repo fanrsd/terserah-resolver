@@ -1,6 +1,5 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
+import { overRateLimit } from "@/lib/ratelimit";
 import {
   ADMIN_COOKIE,
   checkPassword,
@@ -9,25 +8,16 @@ import {
   SESSION_SECONDS,
 } from "@/lib/admin-auth";
 
-// The one endpoint the middleware lets through unauthenticated, so it is the
-// one that has to survive a brute force.
-const limiter =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-        redis: Redis.fromEnv(),
-        limiter: Ratelimit.slidingWindow(10, "15 m"),
-        prefix: "terserah:admin-login",
-      })
-    : null;
+
 
 export async function POST(request: Request) {
-  if (!hasAdmin) {
+  if (!hasAdmin()) {
     return NextResponse.json({ error: "not_configured" }, { status: 503 });
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-  if (limiter && !(await limiter.limit(ip)).success) {
+  // The one endpoint the middleware lets through unauthenticated, so it is the
+  // one that has to survive a brute force.
+  if (await overRateLimit(request, "terserah:admin-login", 10, "15 m")) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 

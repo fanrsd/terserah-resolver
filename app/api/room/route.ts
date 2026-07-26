@@ -1,7 +1,6 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
 import { NextResponse } from "next/server";
 import { recordCase } from "@/lib/history";
+import { overRateLimit } from "@/lib/ratelimit";
 import { getSettings } from "@/lib/settings";
 import {
   cleanLine,
@@ -12,26 +11,14 @@ import {
   store,
 } from "@/lib/room";
 
-// Public, unauthenticated, and every room costs a model call. Rate limiting is
-// the trust boundary, not an optimization.
-const limiter =
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-    ? new Ratelimit({
-        redis: Redis.fromEnv(),
-        limiter: Ratelimit.slidingWindow(5, "1 h"),
-        prefix: "terserah:create",
-      })
-    : null;
-
 export async function POST(request: Request) {
   if ((await getSettings()).paused) {
     return NextResponse.json({ error: "paused" }, { status: 503 });
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
-
-  if (limiter && !(await limiter.limit(ip)).success) {
+  // Public, unauthenticated, and every room costs a model call. Rate limiting
+  // is the trust boundary, not an optimization.
+  if (await overRateLimit(request, "terserah:create", 5, "1 h")) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
@@ -44,7 +31,7 @@ export async function POST(request: Request) {
   }
 
   const room = createRoom(choice, city);
-  await store.put(room);
+  await store().put(room);
   // Awaited so the row exists before a fast responder tries to update it.
   await recordCase(room);
 

@@ -34,9 +34,10 @@ export type Stats = {
  * swallows its own failure: a broken Supabase must not cost anyone dinner.
  */
 export async function recordCase(room: Room): Promise<void> {
-  if (!supabase) return;
+  const db = supabase();
+  if (!db) return;
   try {
-    await supabase.from("cases").insert({
+    await db.from("cases").insert({
       id: room.id,
       city: room.city,
       a_choice: room.aChoice,
@@ -53,10 +54,10 @@ export async function recordVerdict(
   verdict: Verdict,
   judgeMs: number,
 ): Promise<void> {
-  if (!supabase) return;
+  const db = supabase();
+  if (!db) return;
   try {
-    await supabase
-      .from("cases")
+    await db.from("cases")
       .update({
         state: "decided",
         b_dealbreakers: room.bDealbreakers ?? null,
@@ -80,9 +81,10 @@ export async function listCases(
   page: number,
   filter: "all" | "decided" | "awaiting" | "fallback",
 ): Promise<{ rows: CaseRow[]; total: number }> {
-  if (!supabase) return { rows: [], total: 0 };
+  const db = supabase();
+  if (!db) return { rows: [], total: 0 };
 
-  let query = supabase
+  let query = db
     .from("cases")
     .select("*", { count: "exact" })
     .order("created_at", { ascending: false })
@@ -98,10 +100,10 @@ export async function listCases(
 }
 
 export async function getStats(): Promise<Stats | null> {
-  if (!supabase) return null;
+  const db = supabase();
+  if (!db) return null;
 
-  const { data, error } = await supabase
-    .from("cases")
+  const { data, error } = await db.from("cases")
     .select("state, fallback, b_dealbreakers, judge_ms")
     .order("created_at", { ascending: false })
     .limit(1000);

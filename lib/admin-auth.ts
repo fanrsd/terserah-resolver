@@ -1,10 +1,18 @@
-const SECRET = process.env.ADMIN_PASSWORD;
-
 export const ADMIN_COOKIE = "terserah_admin";
 export const SESSION_SECONDS = 60 * 60 * 12;
 
+/**
+ * Env is read inside functions, never at module scope. `middleware.ts` imports
+ * this module and runs early on Cloudflare Workers, where `process.env` is
+ * populated per request — a module-scope read would capture undefined and lock
+ * the panel shut on every deploy.
+ */
+const secret = () => process.env.ADMIN_PASSWORD;
+
 /** Without a password the admin area refuses to open at all, never opens wide. */
-export const hasAdmin = Boolean(SECRET);
+export function hasAdmin(): boolean {
+  return Boolean(secret());
+}
 
 const encoder = new TextEncoder();
 
@@ -12,7 +20,7 @@ const encoder = new TextEncoder();
 async function hmac(message: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
-    encoder.encode(SECRET ?? ""),
+    encoder.encode(secret() ?? ""),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -36,12 +44,14 @@ function constantTimeEqual(a: string, b: string): boolean {
 
 /** Compares digests, not the passwords, so length never leaks. */
 export async function checkPassword(input: unknown): Promise<boolean> {
-  if (!SECRET || typeof input !== "string") return false;
-  const [given, expected] = await Promise.all([
+  const expected = secret();
+  if (!expected || typeof input !== "string") return false;
+
+  const [givenDigest, expectedDigest] = await Promise.all([
     hmac(`pw:${input}`),
-    hmac(`pw:${SECRET}`),
+    hmac(`pw:${expected}`),
   ]);
-  return constantTimeEqual(given, expected);
+  return constantTimeEqual(givenDigest, expectedDigest);
 }
 
 export async function issueToken(): Promise<string> {
@@ -51,7 +61,7 @@ export async function issueToken(): Promise<string> {
 
 /** A leaked cookie dies on its own; the expiry is inside the signed payload. */
 export async function verifyToken(token: unknown): Promise<boolean> {
-  if (!SECRET || typeof token !== "string") return false;
+  if (!secret() || typeof token !== "string") return false;
 
   const separator = token.indexOf(".");
   if (separator < 1) return false;

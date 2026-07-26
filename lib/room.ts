@@ -85,17 +85,23 @@ function memory(): Store {
   };
 }
 
-const url = process.env.UPSTASH_REDIS_REST_URL;
-const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-export const hasPersistentStore = Boolean(url && token);
-
 const globalForStore = globalThis as unknown as { __terserahStore?: Store };
 
-export const store: Store =
-  globalForStore.__terserahStore ??
-  (globalForStore.__terserahStore =
-    url && token ? upstash(url, token) : memory());
+/**
+ * Built lazily and memoized per isolate. On Cloudflare Workers `process.env`
+ * is populated per request, so choosing the backend at module scope would
+ * always pick the in-memory store.
+ */
+export function store(): Store {
+  if (globalForStore.__terserahStore) return globalForStore.__terserahStore;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  globalForStore.__terserahStore =
+    url && token ? upstash(url, token) : memory();
+  return globalForStore.__terserahStore;
+}
 
 /* -------------------------------------------------------- state machine -- */
 

@@ -12,7 +12,7 @@ export async function middleware(request: NextRequest) {
 
   if (isLogin) return NextResponse.next();
 
-  if (!hasAdmin) {
+  if (!hasAdmin()) {
     return new NextResponse("Admin belum dikonfigurasi (ADMIN_PASSWORD).", {
       status: 503,
       headers: { "content-type": "text/plain; charset=utf-8" },

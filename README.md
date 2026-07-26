@@ -13,9 +13,13 @@ Visual system: [`DESIGN.md`](DESIGN.md).
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
-npm test         # 12 tests, no network
+npm run dev        # http://localhost:3000
+npm test           # 18 tests, no network
 npm run build
+
+npm run cf:build   # build the Worker bundle
+npm run cf:preview # run it in workerd locally
+npm run cf:deploy  # ship to terserah.help
 ```
 
 Every integration is optional. With an empty `.env.local` the app still runs
@@ -67,3 +71,35 @@ stored in the clear. The Gemini key is env-only either way.
 The Places field mask is hardcoded to `places.id`: it is the only mask that stays on
 the free Text Search Essentials tier. Any name-bearing field silently promotes every
 call to Pro at $32 per 1,000.
+
+## Deploy
+
+Cloudflare Workers via [`@opennextjs/cloudflare`](https://opennext.js.org/cloudflare),
+on Next's Node.js runtime (not Edge). `terserah.help` is wired as a custom domain in
+[`wrangler.jsonc`](wrangler.jsonc); the zone must already exist on the account.
+
+Secrets never live in `wrangler.jsonc`. Set them once:
+
+```bash
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put ADMIN_PASSWORD
+npx wrangler secret put SETTINGS_ENCRYPTION_KEY
+# then whichever of GEMINI_API_KEY / LLM_API_KEY /
+# GOOGLE_PLACES_API_KEY / UPSTASH_REDIS_REST_{URL,TOKEN} you use
+```
+
+Three things the Workers runtime forced, all of them worth knowing before editing:
+
+- **Env is read inside functions, never at module scope.** `process.env` is populated
+  per request on Workers, so a module-scope read captures `undefined` at isolate
+  start. Clients, limiters, and the room store are built lazily and memoized.
+- **Fonts are inlined as base64** in `lib/og-fonts.ts` (`npm run fonts` regenerates
+  from `assets/*.ttf`). Workers has no filesystem, and a Worker fetching its own
+  public domain fails once deployed.
+- **CI builds the deploy.** OpenNext does not guarantee Windows support. The build
+  happens to work here, but [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+  runs it on Linux so what ships is never platform-dependent.
+
+Bundle is ~2.0 MiB gzipped against Cloudflare's 3 MiB limit — check
+`npx wrangler deploy --dry-run` before adding a large dependency.

@@ -6,3 +6,7 @@ out/
 *.tsbuildinfo
 next-env.d.ts
 supabase/.temp/
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts

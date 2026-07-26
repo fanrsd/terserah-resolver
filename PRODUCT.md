@@ -1,6 +1,6 @@
 # Terserah
 
-Working title: **Terserah** (repo `terserahresolver`). Domain target: `terserah.app`.
+Working title: **Terserah** (repo `terserahresolver`). Domain: `terserah.help`.
 
 ## What it is
 

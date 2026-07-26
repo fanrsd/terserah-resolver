@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Courier_Prime } from "next/font/google";
+import { SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const anton = Anton({
@@ -17,9 +18,7 @@ const courier = Courier_Prime({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
-  ),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? SITE_URL),
   title: "Terserah — pengadilan buat yang bilang terserah",
   description:
     "Dia bilang terserah, lalu menolak semua saranmu. Tetapkan satu tempat, kirim linknya, dan biar putusan itu berlaku sampai dia protes.",

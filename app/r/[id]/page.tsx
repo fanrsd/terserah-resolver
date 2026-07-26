@@ -13,7 +13,7 @@ type Props = { params: Promise<{ id: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
-  const room = isRoomId(id) ? await store.get(id) : null;
+  const room = isRoomId(id) ? await store().get(id) : null;
   if (!room) return { title: "Perkara sudah ditutup — Terserah" };
 
   const decided = room.state === "decided" && room.verdict;
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function RoomPage({ params }: Props) {
   const { id } = await params;
-  const room = isRoomId(id) ? await store.get(id) : null;
+  const room = isRoomId(id) ? await store().get(id) : null;
 
   if (!room) return <Closed />;
 

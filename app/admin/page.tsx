@@ -43,7 +43,7 @@ export default async function AdminRiwayat({
 
   return (
     <AdminShell title="Riwayat perkara" active="riwayat">
-      {!hasSupabase ? (
+      {!hasSupabase() ? (
         <SetupNotice what="SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY belum diset, jadi tidak ada riwayat yang tercatat." />
       ) : null}
 
@@ -94,7 +94,7 @@ export default async function AdminRiwayat({
 
       {rows.length === 0 ? (
         <p className="mt-10 text-sm font-normal text-muted">
-          {hasSupabase
+          {hasSupabase()
             ? "Belum ada perkara yang cocok dengan saringan ini."
             : "Riwayat tidak aktif."}
         </p>

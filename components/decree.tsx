@@ -1,5 +1,6 @@
 import { Stamp } from "@/components/stamp";
 import { mapsUrl } from "@/lib/room";
+import { SITE_DOMAIN } from "@/lib/site";
 
 const DATE = new Intl.DateTimeFormat("id-ID", {
   day: "numeric",
@@ -73,7 +74,7 @@ export function Decree({
       />
 
       <p className={`chrome text-decree-ink/45 ${mapsQuery ? "mt-12" : "mt-16"}`}>
-        terserah.app
+        {SITE_DOMAIN}
       </p>
     </article>
   );

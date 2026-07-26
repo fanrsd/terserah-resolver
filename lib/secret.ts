@@ -5,21 +5,26 @@
  * The master key stays in env, so a Supabase snapshot alone is not enough to
  * read it. Without `SETTINGS_ENCRYPTION_KEY` the admin UI disables the field
  * rather than storing anything in the clear.
+ *
+ * Env is read inside functions, never at module scope: on Cloudflare Workers
+ * `process.env` is populated per request, so a module-scope read captures
+ * undefined at isolate start.
  */
-
-const MASTER = process.env.SETTINGS_ENCRYPTION_KEY;
-
-export const canStoreSecrets = Boolean(MASTER && MASTER.length >= 16);
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+export function canStoreSecrets(): boolean {
+  const master = process.env.SETTINGS_ENCRYPTION_KEY;
+  return Boolean(master && master.length >= 16);
+}
 
 async function masterKey(): Promise<CryptoKey> {
   // SHA-256 of the passphrase gives AES-GCM the 32 bytes it wants from an env
   // string of any length. Not a KDF: this guards a stored value, not a password.
   const digest = await crypto.subtle.digest(
     "SHA-256",
-    encoder.encode(MASTER ?? ""),
+    encoder.encode(process.env.SETTINGS_ENCRYPTION_KEY ?? ""),
   );
   return crypto.subtle.importKey("raw", digest, { name: "AES-GCM" }, false, [
     "encrypt",
@@ -29,7 +34,7 @@ async function masterKey(): Promise<CryptoKey> {
 
 /** Returns base64 of `iv || ciphertext`, or null when encryption is unavailable. */
 export async function encryptSecret(plain: string): Promise<string | null> {
-  if (!canStoreSecrets || !plain) return null;
+  if (!canStoreSecrets() || !plain) return null;
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
@@ -46,7 +51,7 @@ export async function encryptSecret(plain: string): Promise<string | null> {
 
 /** Null on a rotated master key or a tampered blob — never throws at the caller. */
 export async function decryptSecret(packed: unknown): Promise<string | null> {
-  if (!canStoreSecrets || typeof packed !== "string" || !packed) return null;
+  if (!canStoreSecrets() || typeof packed !== "string" || !packed) return null;
 
   try {
     const bytes = Uint8Array.from(atob(packed), (c) => c.charCodeAt(0));

@@ -19,7 +19,7 @@ export default async function AdminPengaturan() {
 
   return (
     <AdminShell title="Pengaturan API" active="pengaturan">
-      {!hasSupabase ? (
+      {!hasSupabase() ? (
         <SetupNotice what="SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY belum diset, jadi perubahan di sini tidak bisa disimpan." />
       ) : null}
 
@@ -33,9 +33,9 @@ export default async function AdminPengaturan() {
 
       <SettingsForm
         initial={settings}
-        disabled={!hasSupabase}
+        disabled={!hasSupabase()}
         keyStored={keyStored}
-        canStoreSecrets={canStoreSecrets}
+        canStoreSecrets={canStoreSecrets()}
       />
 
       <section className="mt-14 border-t border-ink-line pt-6">

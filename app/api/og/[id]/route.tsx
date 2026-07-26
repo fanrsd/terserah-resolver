@@ -1,6 +1,6 @@
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { ImageResponse } from "next/og";
+import { ogFonts } from "@/lib/og-fonts";
+import { SITE_DOMAIN } from "@/lib/site";
 import { isRoomId, store } from "@/lib/room";
 
 // Satori has no CSS variables; these mirror app/globals.css exactly.
@@ -14,29 +14,16 @@ const BONE = "#e8e3e1";
 const MUTED = "#a09694";
 const SEAL = "#5b5c15"; // --color-seal-deep
 
-const font = (name: string) =>
-  readFile(join(process.cwd(), "assets", name)).then(
-    (b) => new Uint8Array(b).buffer as ArrayBuffer,
-  );
+
 
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const room = isRoomId(id) ? await store.get(id) : null;
+  const room = isRoomId(id) ? await store().get(id) : null;
 
-  const [anton, courier, courierBold] = await Promise.all([
-    font("Anton-Regular.ttf"),
-    font("CourierPrime-Regular.ttf"),
-    font("CourierPrime-Bold.ttf"),
-  ]);
-
-  const fonts = [
-    { name: "Anton", data: anton, weight: 400 as const, style: "normal" as const },
-    { name: "Courier", data: courier, weight: 400 as const, style: "normal" as const },
-    { name: "Courier", data: courierBold, weight: 700 as const, style: "normal" as const },
-  ];
+  const fonts = ogFonts();
 
   const size = { width: 1200, height: 630 };
   const label = {
@@ -179,7 +166,7 @@ export async function GET(
               Perkara No. {id.toUpperCase()}
             </div>
             <div style={{ ...label, color: `${DECREE_INK}b3`, display: "flex" }}>
-              terserah.app
+              {SITE_DOMAIN}
             </div>
           </div>
 

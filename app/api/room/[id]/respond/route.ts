@@ -19,7 +19,7 @@ export async function POST(
     return NextResponse.json({ error: "gone" }, { status: 404 });
   }
 
-  const room = await store.get(id);
+  const room = await store().get(id);
   if (!room) return NextResponse.json({ error: "gone" }, { status: 404 });
 
   // Idempotent: a double tap, a retry, or a second tab must not buy another
@@ -48,11 +48,11 @@ export async function POST(
 
   // Persist before deliberating so A's screen can switch from "waiting" to
   // "the judge is considering it" while the model runs.
-  await store.put(responded);
+  await store().put(responded);
 
   const startedAt = Date.now();
   const verdict = await judge(responded);
-  await store.put(decide(responded, verdict));
+  await store().put(decide(responded, verdict));
   await recordVerdict(responded, verdict, Date.now() - startedAt);
 
   return NextResponse.json({ state: "decided" });

@@ -2,15 +2,18 @@ import { decryptSecret, encryptSecret } from "./secret.ts";
 import { DEFAULT_PERSONA, type Settings } from "./settings-schema.ts";
 import { supabase } from "./supabase.ts";
 
-export const DEFAULTS: Settings = {
-  provider: "gemini",
-  baseUrl: "",
-  model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
-  temperature: 1.1,
-  persona: DEFAULT_PERSONA,
-  placeCheck: true,
-  paused: false,
-};
+/** A function, not a constant: `process.env` is per-request on Workers. */
+export function defaults(): Settings {
+  return {
+    provider: "gemini",
+    baseUrl: "",
+    model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    temperature: 1.1,
+    persona: DEFAULT_PERSONA,
+    placeCheck: true,
+    paused: false,
+  };
+}
 
 /** Settings plus the bits the browser must never receive. */
 type StoredSettings = Settings & {
@@ -32,26 +35,28 @@ export function invalidateSettings(): void {
 async function read(): Promise<StoredSettings> {
   const hit = cache.__terserahSettings;
   if (hit && Date.now() - hit.readAt < CACHE_MS) return hit.value;
-  if (!supabase) return { ...DEFAULTS, apiKeyCipher: null };
 
-  const { data, error } = await supabase
-    .from("settings")
+  const db = supabase();
+  const fallback = defaults();
+  if (!db) return { ...fallback, apiKeyCipher: null };
+
+  const { data, error } = await db.from("settings")
     .select(
       "provider, base_url, model, temperature, persona, place_check, paused, api_key_cipher",
     )
     .eq("id", true)
     .maybeSingle();
 
-  if (error || !data) return { ...DEFAULTS, apiKeyCipher: null };
+  if (error || !data) return { ...fallback, apiKeyCipher: null };
 
   const value: StoredSettings = {
     provider: data.provider === "openai" ? "openai" : "gemini",
     baseUrl: data.base_url ?? "",
-    model: data.model || DEFAULTS.model,
+    model: data.model || fallback.model,
     temperature:
       typeof data.temperature === "number"
         ? data.temperature
-        : DEFAULTS.temperature,
+        : fallback.temperature,
     persona: data.persona?.trim() || DEFAULT_PERSONA,
     placeCheck: data.place_check ?? true,
     paused: data.paused ?? false,
@@ -94,7 +99,8 @@ export async function saveSettings(
   next: Settings,
   apiKey?: string | null,
 ): Promise<boolean> {
-  if (!supabase) return false;
+  const db = supabase();
+  if (!db) return false;
 
   const row: Record<string, unknown> = {
     id: true,
@@ -115,7 +121,7 @@ export async function saveSettings(
     row.api_key_cipher = cipher;
   }
 
-  const { error } = await supabase.from("settings").upsert(row);
+  const { error } = await db.from("settings").upsert(row);
   if (error) return false;
 
   invalidateSettings();

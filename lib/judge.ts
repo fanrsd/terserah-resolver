@@ -2,7 +2,8 @@ import type { Room, Verdict } from "./room.ts";
 import { getProviderKey, getSettings } from "./settings.ts";
 import { completionsUrl, type Settings } from "./settings-schema.ts";
 
-const PLACES_KEY = process.env.GOOGLE_PLACES_API_KEY;
+// Env is read inside functions, never at module scope: on Cloudflare Workers
+// `process.env` is populated per request.
 const TIMEOUT_MS = 12_000;
 
 const FIELDS = {
@@ -200,7 +201,7 @@ async function placeExists(query: string): Promise<boolean> {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "X-Goog-Api-Key": PLACES_KEY as string,
+          "X-Goog-Api-Key": process.env.GOOGLE_PLACES_API_KEY as string,
           "X-Goog-FieldMask": "places.id",
         },
         body: JSON.stringify({
@@ -242,7 +243,8 @@ export async function callProvider(
 export async function judge(room: Room): Promise<Verdict> {
   const [settings, key] = await Promise.all([getSettings(), getProviderKey()]);
   const surrendered = !room.bDealbreakers?.length;
-  const checking = settings.placeCheck && Boolean(PLACES_KEY);
+  const checking =
+    settings.placeCheck && Boolean(process.env.GOOGLE_PLACES_API_KEY);
 
   if (key) {
     for (let attempt = 0; attempt < 2; attempt++) {

@@ -5,7 +5,7 @@ import { normalizeSettings, readApiKey } from "@/lib/settings-schema";
 import { hasSupabase } from "@/lib/supabase";
 
 export async function POST(request: Request) {
-  if (!hasSupabase) {
+  if (!hasSupabase()) {
     return NextResponse.json({ error: "no_supabase" }, { status: 503 });
   }
 
@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   if (!next) return NextResponse.json({ error: "invalid" }, { status: 400 });
 
   const apiKey = readApiKey(body);
-  if (typeof apiKey === "string" && !canStoreSecrets) {
+  if (typeof apiKey === "string" && !canStoreSecrets()) {
     return NextResponse.json({ error: "no_encryption_key" }, { status: 400 });
   }
 

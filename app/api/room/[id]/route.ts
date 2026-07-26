@@ -11,7 +11,7 @@ export async function GET(
     return NextResponse.json({ state: "gone" }, { status: 404 });
   }
 
-  const room = await store.get(id);
+  const room = await store().get(id);
   return NextResponse.json(
     { state: room?.state ?? "gone" },
     { status: room ? 200 : 404, headers: { "cache-control": "no-store" } },
