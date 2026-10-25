@@ -1,3 +1,7 @@
+<div align="center">
+  <img src=".github/assets/banner.svg" alt="terserah-resolver — A court for people who say terserah and reject every suggestion." width="100%">
+</div>
+
 # Terserah
 
 Pengadilan untuk orang yang bilang "terserah" lalu menolak semua saranmu.
