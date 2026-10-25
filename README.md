@@ -114,3 +114,7 @@ Three things the Workers runtime forced, all of them worth knowing before editin
 
 Bundle is ~2.0 MiB gzipped against Cloudflare's 3 MiB limit — check
 `npx wrangler deploy --dry-run` before adding a large dependency.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
