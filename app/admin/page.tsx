@@ -16,7 +16,10 @@ const FILTERS = [
 
 type Filter = (typeof FILTERS)[number]["key"];
 
+// Rendered on the server (UTC on Workers), so the zone is pinned rather than
+// inherited — the operator reads WIB.
 const TIME = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
   day: "2-digit",
   month: "short",
   hour: "2-digit",

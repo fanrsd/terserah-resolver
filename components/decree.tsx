@@ -3,6 +3,7 @@ import { mapsUrl } from "@/lib/room";
 import { SITE_DOMAIN } from "@/lib/site";
 
 const DATE = new Intl.DateTimeFormat("id-ID", {
+  timeZone: "Asia/Jakarta",
   day: "numeric",
   month: "long",
   year: "numeric",
